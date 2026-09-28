@@ -131,3 +131,4 @@ slurm/g16_array.sbatch
 calcs/<stage>/{inputs,logs,chks}/   manifests in calcs/<stage>/
 results/
 ```
+# Haloaromatics
