@@ -224,7 +224,7 @@ Details:
   used to predict the PBDEs, and one on all compounds. Site quantities are reduced to the
   most favorable site (`min_*`/`max_*`) or to a degeneracy-weighted effective barrier
   (`eff_*` = −RT ln Σ gᵢ exp(−ΔG‡ᵢ/RT)). Potential-dependent barriers are evaluated at
-  `EXP_POTENTIAL_V` (−2.0 V vs SHE). For barriers, `slope_x_RT` = 1 would be ideal
+  `EXP_POTENTIAL_V` (−2.0 V vs SHE; uncompensated potential, without iR-drop compensation). For barriers, `slope_x_RT` = 1 would be ideal
   transition-state-theory behavior.
 - `correlation_data.csv`: ln(k_obs) and every descriptor, one row per compound and level
 - `correlation_predictions.csv`: predicted vs observed ln(k) for compounds outside the fit set

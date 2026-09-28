@@ -50,7 +50,7 @@ DET_POTENTIALS_V = [-1.0, -1.5, -2.0]        # electrode/donor potentials (V vs 
 
 # Experimental rate constants for correlation (compile -> results/correlations.csv)
 EXPERIMENTAL_KOBS = "data/experimental_kobs.csv"
-EXP_POTENTIAL_V = -2.0          # potential at which the kobs were measured (V vs SHE)
+EXP_POTENTIAL_V = -2.0          # potential at which the kobs were measured (V vs SHE; uncompensated, no iR-drop compensation)
 CORR_FIT_GROUP = "bromobenzene" # fit on this group, then predict the others (e.g. PBDEs)
 CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal")]   # two-descriptor MLR models
 
