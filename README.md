@@ -234,7 +234,8 @@ Details:
 
 Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et al.,
 *Environ. Sci. Technol.* 2026, 60, 1346, Table 1. Two corrections were applied:
-- The measurements were made at −2.0 V vs SHE, not the −1.3 V stated in the paper.
+- The measurements were made at −2.0 V vs SHE; all calculations and correlations use this
+  potential.
 - The published 1,3-dibromobenzene value (0.79 ± 0.074) is per day; it was divided by 24
   to give 0.0329 h⁻¹, consistent with the 21 h half-life.
 
