@@ -6,7 +6,7 @@ flags:   list of short machine-readable strings explaining the status
 from __future__ import annotations
 
 import config as C
-from .geomtools import distance, dot, norm, sub, unit, xyz
+from .geomtools import distance, dot, norm, oop_angle, sub, unit, xyz
 
 
 def expected_terminations(stage_kind, species):
@@ -65,14 +65,15 @@ def evaluate(parsed, species, stage_kind, site=None):
             warn = True
 
     geom = parsed.get("geometry")
-    # radical anion fell apart during optimisation?
+    # radical-anion character from its longest C-X bond
     if species.kind == "radical_anion" and geom and stage_kind != "am1":
-        lim = C.CX_DISSOCIATED_A[species.halogen]
-        for s in range(1, 7):
-            ci, xi = species.atom_index(s)
-            if xi and geom[xi - 1][0] == species.halogen and distance(geom, ci, xi) > lim:
-                flags.append(f"RA_dissociated(C{s}-X {distance(geom, ci, xi):.2f} A)")
-                warn = True
+        state, site_, r, oop = ra_state(geom, species)
+        if state == "dissociated":
+            flags.append(f"RA_dissociated(C{site_}-X {r:.2f} A)")
+            warn = True
+        elif state == "sigma_bent":
+            flags.append(f"RA_sigma(C{site_}-X {r:.2f} A, {oop:.0f} deg)")
+            warn = True
 
     # TS: imaginary mode should be the C-X stretch
     if species.kind == "ts" and stage_kind == "ts" and geom and parsed["mode1"] and site:
@@ -87,6 +88,38 @@ def evaluate(parsed, species, stage_kind, site=None):
 
     status = "fail" if fail else ("warn" if warn else "ok")
     return status, flags
+
+
+def ra_state(geom, species):
+    """Classify a radical-anion geometry from its longest C-X bond.
+
+    pi          r <= RA_PI_MAX_A                    (intact pi radical anion)
+    sigma_bent  X bent >= RA_SIGMA_OOP_DEG out of plane and r <= RA_SIGMA_MAX_A
+                                                    (loose, bent sigma-type radical anion)
+    dissociated r > CX_DISSOCIATED_A (planar) or r > RA_SIGMA_MAX_A  (Ar...X- complex)
+    elongated   anything else (planar, pi_max < r <= dissociation threshold)
+    Returns (state, site, r, oop_deg).
+    """
+    X = species.halogen
+    best = None
+    for s in range(1, 7):
+        ci, xi = species.atom_index(s)
+        if xi and geom[xi - 1][0] == X:
+            r = distance(geom, ci, xi)
+            if best is None or r > best[2]:
+                best = (s, ci, r, oop_angle(geom, ci, xi))
+    if best is None:
+        return "pi", None, None, None
+    s, ci, r, oop = best
+    if r <= C.RA_PI_MAX_A[X]:
+        state = "pi"
+    elif oop >= C.RA_SIGMA_OOP_DEG and r <= C.RA_SIGMA_MAX_A[X]:
+        state = "sigma_bent"
+    elif r > C.CX_DISSOCIATED_A[X] or r > C.RA_SIGMA_MAX_A[X]:
+        state = "dissociated"
+    else:
+        state = "elongated"
+    return state, s, r, oop
 
 
 def usable(status):

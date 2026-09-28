@@ -169,6 +169,9 @@ def reaction_table(tab, reactions, species):
             prow = tab.get((level, rx.parent), {})
             lumo = prow.get("lumo_eV")
             e = {}
+            # a dissociated "radical anion" is an Ar...X- complex, not ArX.-: no ET/frag values
+            if "RA_dissociated" in (tab.get((level, rx.radical_anion), {}).get("flags") or ""):
+                g["RA"] = None
             e["ET"] = _dg([g["RA"]], [g["ArX"], ge])
             e["1e"] = _dg([g["Ar_rad"], g["X"]], [g["ArX"], ge])
             e["frag"] = _dg([g["Ar_rad"], g["X"]], [g["RA"]])

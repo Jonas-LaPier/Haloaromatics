@@ -23,7 +23,7 @@ from pathlib import Path
 
 import config as C
 from . import qc
-from .geomtools import distance, displace_along, fmt_atoms, tilt_out_of_plane
+from .geomtools import distance, displace_along, fmt_atoms, perturb, tilt_out_of_plane
 from .parse import parse_log, scan_points
 from .species import build_all
 
@@ -192,7 +192,7 @@ def _route(stage, species, opt_opts=(), extra=(), geom_check=False, guess_read=F
     if guess_read:
         parts.append("Guess=Read")
     parts += list(extra)
-    return " ".join(parts)
+    return " ".join(dict.fromkeys(parts))   # drop duplicate keywords, keep order
 
 
 def _gjf(link0, route, title, species, coords=None, tail=""):
@@ -232,7 +232,7 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
 
     if own_chk:  # restart from this job's own checkpoint (last geometry + wfn)
         link0 = _link0(stage, job)
-        route = _rt(species, opt_opts, geom_check=True, guess_read=True)
+        route = _rt(species, opt_opts, geom_check=True, guess_read=not retry.get("no_guess"))
         tail = retry.get("tail", NBO_TAIL if stage.kind == "sp" else "")
         return _gjf(link0, route, title, species, tail=tail)
 
@@ -258,6 +258,13 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
         if coords:
             return _gjf(_link0(stage, job), _rt(species, opt_opts), title, species, coords)
         am1 = STAGES["am1"]
+        if species.kind == "radical_anion":
+            # Symmetric starting rings converge to symmetry-constrained saddle points (planar
+            # pi radical anions with an imaginary out-of-plane or Jahn-Teller mode). Start
+            # from a slightly perturbed AM1 geometry and optimise without symmetry.
+            p, _ = _load_ok(am1, job, species)
+            return _gjf(_link0(stage, job), _route(stage, species, opt_opts, extra=("NoSymm",) + extra, scf=scf),
+                        title, species, perturb(p["geometry"], 0.03, seed=len(job)))
         if not ignore_prereq:
             _load_ok(am1, job, species)
         return _gjf(_link0(stage, job, oldchk=am1.chk(job)),
@@ -315,12 +322,12 @@ def retry_fixes(stage, parsed, status, flags, species=None):
     """Map a failure to input modifications."""
     et = parsed.get("error_type") if parsed else None
     fx = {}
+    nosymm = [] if stage.kind in ("tsscan", "ts") else ["NoSymm"]
     if et == "scf_convergence":
         # level shift damps orbital flipping between near-degenerate pi* orbitals;
         # NoSymm stops the occupation being locked to one irreducible representation
         fx["scf"] = "SCF=(XQC,VShift=400,MaxCycle=512)"
-        if stage.kind not in ("tsscan", "ts"):
-            fx["extra"] = ["NoSymm"]
+        fx["extra"] = nosymm
         if (stage.kind == "am1" and species is not None and species.kind == "radical_anion"
                 and _scf_failed_at_start(parsed)):
             # start from the converged neutral parent's AM1 geometry instead of the ideal ring
@@ -329,10 +336,15 @@ def retry_fixes(stage, parsed, status, flags, species=None):
                 par = parse_log(pp)
                 if qc.usable(qc.evaluate(par, SPECIES[species.meta["parent"]], "am1")[0]):
                     fx["coords"] = par["geometry"]
+        elif stage.kind in ("optfreq", "ts") and not _scf_failed_at_start(parsed) and parsed.get("geometry"):
+            # SCF failed mid-optimisation: keep the geometry reached, but not the bad wavefunction
+            fx.update({"from_own_chk": True, "no_guess": True, "opt_opts": ["MaxCycles=300"]})
         return fx
     if et in ("opt_maxcycles", "opt_not_converged", "time_limit", None) and parsed and parsed.get("geometry"):
         fx["from_own_chk"] = True
-        fx["opt_opts"] = ["MaxCycles=300"] if stage.kind in ("am1", "optfreq") else []
+        fx["opt_opts"] = ["MaxCycles=300", "CalcFC"] if stage.kind in ("am1", "optfreq") else []
+        if stage.kind == "optfreq":
+            fx["extra"] = nosymm
     if et == "internal_coords":
         fx["opt_opts"] = ["Cartesian", "MaxCycles=300"]
         fx["from_own_chk"] = True
@@ -340,9 +352,13 @@ def retry_fixes(stage, parsed, status, flags, species=None):
         fx["from_own_chk"] = True
     imag = [f for f in flags if f.startswith("n_imag=")]
     if imag and stage.kind == "optfreq" and parsed.get("mode1") and parsed.get("geometry"):
-        # push the minimum off the saddle along the imaginary mode
-        fx = {"coords": displace_along(parsed["geometry"], parsed["mode1"]),
-              "opt_opts": ["CalcFC", "Tight"]}
+        # push the minimum off the saddle along the imaginary mode, without symmetry so the
+        # optimiser cannot re-symmetrise the displaced structure
+        big = abs(parsed.get("lowest_freq") or 0) > 60
+        g = displace_along(parsed["geometry"], parsed["mode1"], 0.25 if big else 0.15)
+        fx = {"coords": perturb(g, 0.01, seed=7),
+              "opt_opts": ["CalcFC", "MaxCycles=300"] + ([] if big else ["Tight"]),
+              "extra": nosymm}
     if stage.kind == "tsscan" and fx.get("from_own_chk"):
         fx.pop("from_own_chk")  # restart scans from scratch (modredundant is not kept)
     return fx

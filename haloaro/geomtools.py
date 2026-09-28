@@ -55,6 +55,21 @@ def tilt_out_of_plane(atoms, c_idx, x_idx, angle_deg):
     return out
 
 
+def oop_angle(geom, ci, xi):
+    """Angle (deg) between the C-X bond (1-based atom indices) and the ring plane."""
+    ring = [xyz(a) for a in geom[:6]]
+    n = unit(cross(sub(ring[2], ring[0]), sub(ring[4], ring[0])))
+    v = unit(sub(xyz(geom[xi - 1]), xyz(geom[ci - 1])))
+    return math.degrees(math.asin(min(1.0, abs(dot(v, n)))))
+
+
+def perturb(atoms, amp=0.03, seed=0):
+    """Deterministic small displacement of every atom (breaks spatial symmetry)."""
+    import random
+    rnd = random.Random(seed)
+    return [(a[0],) + tuple(c + rnd.uniform(-amp, amp) for c in a[1:4]) for a in atoms]
+
+
 def displace_along(atoms, mode, amp=0.15):
     """Displace geometry along a normal mode (largest atom moves by amp A)."""
     m = max(norm(v) for v in mode) or 1.0

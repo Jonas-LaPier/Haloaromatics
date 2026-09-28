@@ -132,10 +132,18 @@ Details:
   to also write `.fchk` files.
 - `retry` moves the failed log and input to `calcs/<stage>/logs/failed/<name>.tryN.*`
   and writes a new input:
-  - SCF failure → `SCF=(XQC,MaxCycle=512)`
-  - optimisation ran out of cycles or time → restart from its own chk with `Geom=Check Guess=Read`
+  - SCF failure → `SCF=(XQC,VShift=400,MaxCycle=512) NoSymm`. If it failed partway through
+    an optimization, the job restarts from the geometry it reached, but not its wavefunction.
+  - optimization ran out of cycles or time → restart from its own chk with
+    `Geom=Check Guess=Read`, `Opt=(MaxCycles=300,CalcFC)`, `NoSymm`
   - internal-coordinate errors → `Opt=Cartesian`
-  - an imaginary frequency at a minimum → displace along that mode and reoptimise with `Opt=(CalcFC,Tight)`
+  - an imaginary frequency at a minimum → displace along that mode (0.25 Å for modes
+    above 60 cm⁻¹, otherwise 0.15 Å plus `Tight`) and reoptimize with `Opt=CalcFC NoSymm`
+  - `retry` refuses a job that has already failed `MAX_RETRIES` times (default 3); use
+    `--force` to override.
+- Radical anions are optimized without symmetry, starting from a slightly perturbed AM1
+  geometry. From symmetric starting rings, the symmetry-constrained optimization converges
+  to planar saddle points with an imaginary out-of-plane or Jahn–Teller mode.
 - `--only NAME ...` limits any stage command to specific jobs. `--force` regenerates inputs.
 
 ### Quality checks (`haloaro/qc.py`)
@@ -146,9 +154,16 @@ Details:
 - There are no imaginary frequencies at minima and exactly 1 at TSs
 - The TS imaginary mode contains the C–X stretch (flag `ts_mode_not_CX_stretch` otherwise)
 - ⟨S²⟩ is within 0.10 of 0.75 for doublets
-- **Radical anion dissociated**: C–X > 2.3 Å (Cl) or 2.5 Å (Br). The radical anion has no
-  bound minimum at that level, so reduction there is concerted. Its row in the reaction
-  table is flagged.
+- **Radical-anion state** (`RA_state` column; set by the longest C–X bond and the
+  out-of-plane angle of X):
+  - `pi`: C–X ≤ 2.00 Å (Cl) or 2.15 Å (Br)
+  - `sigma_bent` (flag `RA_sigma`): X bent ≥ 10° out of the plane, with C–X ≤ 2.8 Å (Cl)
+    or 3.0 Å (Br). This is a loose, bent σ-type radical anion.
+  - `dissociated` (flag `RA_dissociated`): a planar C–X longer than 2.3 Å (Cl) or 2.5 Å
+    (Br), or any C–X beyond the σ limit. It is an Ar•···X⁻ complex, so there is no
+    ArX•⁻ intermediate at that level. Its ET and fragmentation ΔG are left blank, no
+    stepwise TS is generated, and the pathway comparison reports "concerted only".
+  - `elongated`: anything else.
 
 ## Output (`results/`)
 

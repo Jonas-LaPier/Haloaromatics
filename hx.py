@@ -189,6 +189,10 @@ def cmd_retry(a):
             p, status, flags = job_state(st, job, sp, site)
             if status not in ("fail",) + (("incomplete",) if a.include_incomplete else ()):
                 continue
+            n_prev = len(list((st.dir / "logs" / "failed").glob(f"{job}.try*.log")))
+            if n_prev >= C.MAX_RETRIES and not a.force:
+                print(f"[{sn}] {job}: already retried {n_prev}x ({flags}); inspect manually or use --force")
+                continue
             fx = retry_fixes(st, p, status, flags, sp)
             if not fx and not a.force:
                 print(f"[{sn}] {job}: no automatic fix for {flags}; inspect manually (or --force to rerun as-is)")
@@ -203,6 +207,15 @@ def cmd_retry(a):
                 continue
             print(f"[{sn}] {job}: {status} {flags} -> retry #{n} with {sorted(fx)}")
     print("Now run: python3 hx.py submit <stage>")
+
+
+def _ra_cols(sp, p, st):
+    """Radical-anion character (pi / sigma_bent / dissociated / elongated) from its geometry."""
+    if sp.kind != "radical_anion" or st.kind != "optfreq" or not p.get("geometry"):
+        return {}
+    state, site, r, oop = qc.ra_state(p["geometry"], sp)
+    return {"RA_state": state, "RA_longest_CX_site": site,
+            "RA_longest_CX_A": round(r, 3) if r else None, "RA_oop_deg": round(oop, 1) if oop is not None else None}
 
 
 def cmd_scrape(a):
@@ -231,6 +244,7 @@ def cmd_scrape(a):
                 "dipole_D": p.get("dipole_D"),
                 "polar_iso_A3": (round(p["polar_iso_bohr3"] * 0.148185, 3)
                                  if p.get("polar_iso_bohr3") is not None else None),
+                **_ra_cols(sp, p, st),
                 "radius_A": (round(sphere_radius(p["geometry"]), 3)
                              if sp.kind == "parent" and p.get("geometry") and qc.usable(status) else None),
             })

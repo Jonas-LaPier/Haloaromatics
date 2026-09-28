@@ -19,6 +19,7 @@ RE_ELAPSED = re.compile(r"Elapsed time:\s+(\d+) days\s+(\d+) hours\s+(\d+) minut
 KNOWN_ERRORS = [
     ("Convergence failure -- run terminated", "scf_convergence"),
     ("No lower point found -- run aborted", "scf_convergence"),   # l508 (QC/XQC) failure
+    ("SCF has not converged", "scf_convergence"),                 # l701/l801 after SCF failure
     ("Number of steps exceeded", "opt_maxcycles"),
     ("Optimization stopped", "opt_not_converged"),
     ("FormBX had a problem", "internal_coords"),
@@ -200,7 +201,9 @@ def parse_log(path):
     d = {"file": str(path), "name": path.stem}
     d["n_normal_term"] = text.count("Normal termination of Gaussian")
     d["error_term"] = "Error termination" in text
-    tail = "\n".join(lines[-60:])
+    # l9999 prints the full summary before terminating, so opt-cycle messages can sit
+    # several hundred lines above the end of the file
+    tail = "\n".join(lines[-800:])
     d["error_type"] = next((code for pat, code in KNOWN_ERRORS if pat in tail), None)
     if d["error_type"] is None and d["error_term"]:
         d["error_type"] = "unknown"

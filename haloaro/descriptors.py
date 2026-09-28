@@ -35,7 +35,7 @@ import math
 
 import config as C
 from . import thermo
-from .geomtools import cross, distance, dot, norm, sub, unit, xyz
+from .geomtools import distance, oop_angle
 
 K = C.HARTREE_TO_KCAL
 EV = C.HARTREE_TO_EV
@@ -72,14 +72,6 @@ def _atoms(atoms, level, name):
 
 def _diff(a, b, scale=1.0):
     return None if a is None or b is None else (a - b) * scale
-
-
-def oop_angle(geom, ci, xi):
-    """Angle (deg) between the C-X bond and the ring plane."""
-    ring = [xyz(a) for a in geom[:6]]
-    n = unit(cross(sub(ring[2], ring[0]), sub(ring[4], ring[0])))
-    v = unit(sub(xyz(geom[xi - 1]), xyz(geom[ci - 1])))
-    return math.degrees(math.asin(min(1.0, abs(dot(v, n)))))
 
 
 def ring_neighbours(ring, site, halogen):

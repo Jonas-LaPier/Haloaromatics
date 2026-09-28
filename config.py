@@ -104,4 +104,8 @@ DG_SOLV_PROTON_KCAL = -265.9
 
 # QC thresholds
 S2_TOL = 0.10                     # |<S^2> - s(s+1)| above this is flagged
-CX_DISSOCIATED_A = {"Cl": 2.30, "Br": 2.50}   # C-X distance => RA fell apart
+CX_DISSOCIATED_A = {"Cl": 2.30, "Br": 2.50}   # planar C-X beyond this => Ar...X- complex
+RA_PI_MAX_A = {"Cl": 2.00, "Br": 2.15}        # C-X up to this => intact pi radical anion
+RA_SIGMA_MAX_A = {"Cl": 2.80, "Br": 3.00}     # bent C-X up to this => sigma-type radical anion
+RA_SIGMA_OOP_DEG = 10.0                       # X out-of-plane angle marking a bent sigma RA
+MAX_RETRIES = 3                               # retry refuses jobs with this many failed tries
