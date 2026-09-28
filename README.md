@@ -151,7 +151,9 @@ Details:
 - Normal termination count (2 for Opt+Freq)
 - Charge, multiplicity and atom count match the species
 - A stationary point was found and the free energy is present
-- There are no imaginary frequencies at minima and exactly 1 at TSs
+- There are no imaginary frequencies at minima and exactly 1 at TSs. Extra imaginary modes
+  smaller than `IMAG_TOL_CM` (20 cm⁻¹) are flagged `small_imag` as a warning rather than a
+  failure, since they are integration-grid noise on floppy radical anions.
 - The TS imaginary mode contains the C–X stretch (flag `ts_mode_not_CX_stretch` otherwise)
 - ⟨S²⟩ is within 0.10 of 0.75 for doublets
 - **Radical-anion state** (`RA_state` column; set by the longest C–X bond and the
