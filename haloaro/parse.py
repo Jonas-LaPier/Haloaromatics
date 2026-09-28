@@ -18,6 +18,7 @@ RE_ELAPSED = re.compile(r"Elapsed time:\s+(\d+) days\s+(\d+) hours\s+(\d+) minut
 
 KNOWN_ERRORS = [
     ("Convergence failure -- run terminated", "scf_convergence"),
+    ("No lower point found -- run aborted", "scf_convergence"),   # l508 (QC/XQC) failure
     ("Number of steps exceeded", "opt_maxcycles"),
     ("Optimization stopped", "opt_not_converged"),
     ("FormBX had a problem", "internal_coords"),

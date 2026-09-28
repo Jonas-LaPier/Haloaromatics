@@ -34,7 +34,7 @@ OOP_ANGLE_DEG = 15.0     # out-of-plane tilt of X applied to the start geometry
 
 # Extra route keywords common to all DFT jobs
 DFT_EXTRA = "Int=UltraFine"
-AM1_ROUTE = "# Opt AM1 SCF=XQC"
+AM1_SCF = "SCF=XQC"                    # route: #p Opt AM1 <AM1_SCF>
 
 # --------------------------------------------------------------------------- #
 # Stage -> resources on Sherlock.  mem is total GB per job; %mem in the .gjf is

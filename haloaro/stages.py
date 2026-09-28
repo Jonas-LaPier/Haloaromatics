@@ -116,9 +116,7 @@ def _kw(name, opts):
 def _route(stage, species, opt_opts=(), extra=(), geom_check=False, guess_read=False, scf=None):
     parts = ["#p"]
     if stage.kind == "am1":
-        parts = [C.AM1_ROUTE]
-        if opt_opts:
-            parts = ["#p", _kw("Opt", list(opt_opts)), "AM1", scf or "SCF=XQC"]
+        parts += [_kw("Opt", list(opt_opts)), "AM1", scf or C.AM1_SCF]
     else:
         lvl = C.LEVELS[stage.level]
         if species.is_atom:
@@ -175,27 +173,32 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
     scf = retry.get("scf")
     coords = retry.get("coords")
     own_chk = retry.get("from_own_chk", False)
+    extra = tuple(retry.get("extra", ()))
+
+    def _rt(sp, oo=(), **kw):
+        kw.setdefault("scf", scf)
+        return _route(stage, sp, oo, extra=extra, **kw)
 
     if own_chk:  # restart from this job's own checkpoint (last geometry + wfn)
         link0 = _link0(stage, job)
-        route = _route(stage, species, opt_opts, geom_check=True, guess_read=True, scf=scf)
+        route = _rt(species, opt_opts, geom_check=True, guess_read=True)
         tail = retry.get("tail", "")
         return _gjf(link0, route, title, species, tail=tail)
 
     if stage.kind == "am1":
-        return _gjf(_link0(stage, job), _route(stage, species, opt_opts, scf=scf),
+        return _gjf(_link0(stage, job), _rt(species, opt_opts),
                     title, species, coords or species.atoms())
 
     if stage.kind == "optfreq":
         if species.is_atom:
-            return _gjf(_link0(stage, job), _route(stage, species, scf=scf), title, species, species.atoms())
+            return _gjf(_link0(stage, job), _rt(species), title, species, species.atoms())
         if coords:
-            return _gjf(_link0(stage, job), _route(stage, species, opt_opts, scf=scf), title, species, coords)
+            return _gjf(_link0(stage, job), _rt(species, opt_opts), title, species, coords)
         am1 = STAGES["am1"]
         if not ignore_prereq:
             _load_ok(am1, job, species)
         return _gjf(_link0(stage, job, oldchk=am1.chk(job)),
-                    _route(stage, species, opt_opts, geom_check=True, scf=scf), title, species)
+                    _rt(species, opt_opts, geom_check=True), title, species)
 
     rxn = RXN_BY_TS[job]
     ci, xi = species.atom_index(site)
@@ -209,12 +212,12 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
                        "C-X cleavage is barrierless from the RA at this level")
         geom = tilt_out_of_plane(p["geometry"], ci, xi, C.OOP_ANGLE_DEG)
         tail = f"B {ci} {xi} S {C.SCAN_STEPS} {C.SCAN_STEP_SIZE:.3f}"
-        return _gjf(_link0(stage, job), _route(stage, species, opt_opts, scf=scf),
+        return _gjf(_link0(stage, job), _rt(species, opt_opts),
                     title, species, geom, tail=tail)
 
     if stage.kind == "ts":
         if coords:
-            return _gjf(_link0(stage, job), _route(stage, species, opt_opts, scf=scf), title, species, coords)
+            return _gjf(_link0(stage, job), _rt(species, opt_opts), title, species, coords)
         scan = STAGES[f"tsscan_{stage.level}"]
         lp = ROOT / scan.log(job)
         if not lp.exists():
@@ -231,7 +234,7 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
             raise Skip("scan maximum at last point: extend SCAN_STEPS in config.py")
         g = pts[k]["geometry"]
         title += f" (scan point {k}/{len(es)-1}, r(C-X)={distance(g, ci, xi):.3f} A)"
-        return _gjf(_link0(stage, job), _route(stage, species, opt_opts, scf=scf), title, species, g)
+        return _gjf(_link0(stage, job), _rt(species, opt_opts), title, species, g)
 
     raise ValueError(stage.kind)
 
@@ -239,12 +242,31 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
 # --------------------------------------------------------------------------- #
 # Retry logic
 # --------------------------------------------------------------------------- #
-def retry_fixes(stage, parsed, status, flags):
+def _scf_failed_at_start(parsed):
+    """True if the SCF never converged at the first geometry (no opt step taken)."""
+    lines = parsed.get("_lines", [])
+    return not any("Step number" in l for l in lines)
+
+
+def retry_fixes(stage, parsed, status, flags, species=None):
     """Map a failure to input modifications."""
     et = parsed.get("error_type") if parsed else None
     fx = {}
     if et == "scf_convergence":
-        fx["scf"] = "SCF=(XQC,MaxCycle=512)"
+        # level shift damps orbital flipping between near-degenerate pi* orbitals;
+        # NoSymm stops the occupation being locked to one irreducible representation
+        fx["scf"] = "SCF=(XQC,VShift=400,MaxCycle=512)"
+        if stage.kind not in ("tsscan", "ts"):
+            fx["extra"] = ["NoSymm"]
+        if (stage.kind == "am1" and species is not None and species.kind == "radical_anion"
+                and _scf_failed_at_start(parsed)):
+            # start from the converged neutral parent's AM1 geometry instead of the ideal ring
+            pp = ROOT / stage.log(species.meta["parent"])
+            if pp.exists():
+                par = parse_log(pp)
+                if qc.usable(qc.evaluate(par, SPECIES[species.meta["parent"]], "am1")[0]):
+                    fx["coords"] = par["geometry"]
+        return fx
     if et in ("opt_maxcycles", "opt_not_converged", "time_limit", None) and parsed and parsed.get("geometry"):
         fx["from_own_chk"] = True
         fx["opt_opts"] = ["MaxCycles=300"] if stage.kind in ("am1", "optfreq") else []

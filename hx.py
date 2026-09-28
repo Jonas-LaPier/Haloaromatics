@@ -179,7 +179,7 @@ def cmd_retry(a):
             p, status, flags = job_state(st, job, sp, site)
             if status not in ("fail",) + (("incomplete",) if a.include_incomplete else ()):
                 continue
-            fx = retry_fixes(st, p, status, flags)
+            fx = retry_fixes(st, p, status, flags, sp)
             if not fx and not a.force:
                 print(f"[{sn}] {job}: no automatic fix for {flags}; inspect manually (or --force to rerun as-is)")
                 continue

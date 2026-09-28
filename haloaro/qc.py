@@ -57,7 +57,9 @@ def evaluate(parsed, species, stage_kind, site=None):
             fail = True
 
     # spin contamination
-    if species.mult == 2 and parsed["S2"] is not None:
+    # (skipped for AM1: semi-empirical UHF radicals are routinely contaminated and the
+    #  AM1 stage only supplies starting geometries)
+    if species.mult == 2 and parsed["S2"] is not None and stage_kind != "am1":
         if abs(parsed["S2"] - 0.75) > C.S2_TOL:
             flags.append(f"spin_contam S2={parsed['S2']:.3f}")
             warn = True
