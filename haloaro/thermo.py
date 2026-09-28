@@ -228,12 +228,15 @@ def ts_table(tab, reactions):
     return out
 
 
-def pathway_table(rx_rows, ts_rows, det_rows):
+def pathway_table(rx_rows, ts_rows, det_rows, lam_i=None):
     """Stepwise (via ArX.-) vs concerted (Saveant) reduction barriers at each potential.
 
     Stepwise, at electrode/donor potential E (SMD TS levels only):
         dG_ET(E)    = F (E - E°_ET)                       ArX + e- -> ArX.-
-        dG‡_ET(E)   = (lambda0/4)(1 + dG_ET(E)/lambda0)^2  Marcus, outer-sphere only
+        lambda_ET   = lambda0 + lambda_i                  outer sphere (Marcus-Hush, as in
+                                                          det_table) + inner sphere (Nelsen
+                                                          4-point, sp stage)
+        dG‡_ET(E)   = (lambda_ET/4)(1 + dG_ET(E)/lambda_ET)^2   Marcus
         dG‡_frag    = G(TS) - G(ArX.-)                    from the ts_* stage
         dG‡_step(E) = max( dG‡_ET(E),  max(dG_ET(E), 0) + dG‡_frag )
     i.e. the rate-limiting step is either the electron transfer or the C-X cleavage of the
@@ -251,16 +254,23 @@ def pathway_table(rx_rows, ts_rows, det_rows):
             continue
         k = key(d)
         r, t = rx.get(k, {}), ts.get(k, {})
-        lam, e_et = d.get("lambda0_kcal"), r.get("E_ET_V")
+        lam0, e_et = d.get("lambda0_kcal"), r.get("E_ET_V")
+        li_level = gas_counterpart(level) if C.LAMBDA_I_FROM_GAS else level
+        li = (lam_i or {}).get((li_level, d["parent"]))
+        lam = None if lam0 is None else lam0 + (li or 0.0)
         frag = t.get("dG_act_kcal (TS - ArX.-)")
         ra_unbound = "RA_dissociated" in (r.get("RA_flags") or "")
         ts_ok = t.get("ts_status") in ("ok", "warn")
         row = {"level": level, "halogen": d["halogen"], "parent": d["parent"], "site": d["site"],
                "degeneracy": d["degeneracy"], "E0_ET_V (ArX/ArX.-)": e_et,
-               "E0_DET_V (ArX/Ar.+X-)": d.get("E0_DET_V"), "lambda0_kcal": lam,
+               "E0_DET_V (ArX/Ar.+X-)": d.get("E0_DET_V"), "lambda0_kcal": lam0,
+               "lambda_i_kcal": _r(li), "lambda_ET_total_kcal": _r(lam),
+               "dG0_act_ET_kcal (lambda_ET/4)": _r(lam / 4) if lam is not None else None,
                "dG_act_frag_kcal (TS - ArX.-)": frag if ts_ok else None,
                "dG0_act_concerted_kcal": d.get("dG0_act_kcal (intrinsic)")}
         notes = []
+        if li is None and not ra_unbound:
+            notes.append("lambda_i unavailable (sp stage): ET barrier uses lambda0 only")
         if ra_unbound:
             notes.append("radical anion unbound at this level: concerted only")
         elif not ts_ok:

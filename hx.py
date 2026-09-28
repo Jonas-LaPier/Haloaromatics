@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import json
 import os
 import shutil
 import subprocess
@@ -30,7 +31,7 @@ os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 
 import config as C  # noqa: E402
-from haloaro import qc, thermo  # noqa: E402
+from haloaro import descriptors, qc, thermo  # noqa: E402
 from haloaro.geomtools import sphere_radius  # noqa: E402
 from haloaro.parse import parse_log  # noqa: E402
 from haloaro.stages import (REACTIONS, SPECIES, STAGES, Skip, build_input, jobs,  # noqa: E402
@@ -208,11 +209,15 @@ def cmd_scrape(a):
     for sn in resolve(a.stages):
         st = STAGES[sn]
         rows = []
+        atoms = {}
         for job, sp, site in jobs(st):
             if not st.inp(job).exists():
                 continue
             p, status, flags = job_state(st, job, sp, site)
             p = p or {}
+            if st.kind != "am1" and p.get("geometry"):
+                atoms[job] = {"status": status, "geometry": p["geometry"],
+                              "hirshfeld": p.get("hirshfeld"), "wiberg": p.get("wiberg")}
             lumo = p.get("lumo")
             rows.append({
                 "stage": sn, "level": st.level or "am1", "name": job, "kind": sp.kind,
@@ -223,10 +228,15 @@ def cmd_scrape(a):
                 "lumo_eV": round(lumo * C.HARTREE_TO_EV, 4) if lumo is not None else None,
                 "S2": p.get("S2"), "n_imag": p.get("n_imag"), "lowest_freq": p.get("lowest_freq"),
                 "wall_hours": p.get("wall_hours"),
+                "dipole_D": p.get("dipole_D"),
+                "polar_iso_A3": (round(p["polar_iso_bohr3"] * 0.148185, 3)
+                                 if p.get("polar_iso_bohr3") is not None else None),
                 "radius_A": (round(sphere_radius(p["geometry"]), 3)
                              if sp.kind == "parent" and p.get("geometry") and qc.usable(status) else None),
             })
         write_csv(RAW / f"{sn}.csv", rows)
+        if atoms:
+            (RAW / f"{sn}_atoms.json").write_text(json.dumps(atoms))
         c = Counter(r["status"] for r in rows)
         print(f"[{sn}] {len(rows)} rows -> {RAW / (sn + '.csv')}  {dict(c)}")
 
@@ -248,7 +258,16 @@ def cmd_compile(a):
     rx = thermo.reaction_table(tab, REACTIONS, SPECIES)
     ts = thermo.ts_table(tab, REACTIONS) if C.RUN_RA_TS else []
     det = thermo.det_table(tab, REACTIONS)
-    path = thermo.pathway_table(rx, ts, det) if C.RUN_RA_TS else []
+    atoms = {}
+    for sn, st in STAGES.items():
+        f = RAW / f"{sn}_atoms.json"
+        if f.exists() and st.kind in ("optfreq", "sp"):
+            for name, v in json.loads(f.read_text()).items():
+                atoms[(st.level, name)] = v
+    mol, lam_i = descriptors.molecular_table(tab, SPECIES, rx)
+    path = thermo.pathway_table(rx, ts, det, lam_i) if C.RUN_RA_TS else []
+    sites = descriptors.site_table(tab, atoms, SPECIES, REACTIONS, rx, ts, det)
+    prod = descriptors.product_distribution(sites, det, path)
     lumo = [{"level": r["level"], "name": r["name"], "halogen": r["halogen"], "n_X": r["n_X"],
              "LUMO_Eh": r["lumo"], "LUMO_eV": r["lumo_eV"], "HOMO_Eh": r["homo"], "status": r["status"]}
             for r in species_rows if r["kind"] == "parent" and r["level"] in C.LEVELS]
@@ -263,12 +282,17 @@ def cmd_compile(a):
     write_csv(RESULTS / "parent_LUMO.csv", lumo)
     write_csv(RESULTS / "reactions.csv", rx)
     write_csv(RESULTS / "det_barriers.csv", det)
+    write_csv(RESULTS / "molecular_descriptors.csv", mol)
+    write_csv(RESULTS / "site_descriptors.csv", sites)
+    write_csv(RESULTS / "product_distribution.csv", prod)
     if C.RUN_RA_TS:
         write_csv(RESULTS / "ts_barriers.csv", ts)
         write_csv(RESULTS / "pathway_comparison.csv", path)
     write_csv(RESULTS / "qc_issues.csv", qcrows)
     print(f"wrote results/species_energies.csv ({len(species_rows)}), parent_LUMO.csv ({len(lumo)}), "
-          f"reactions.csv ({len(rx)}), det_barriers.csv ({len(det)}), qc_issues.csv ({len(qcrows)})")
+          f"reactions.csv ({len(rx)}), det_barriers.csv ({len(det)}), molecular_descriptors.csv ({len(mol)}), "
+          f"site_descriptors.csv ({len(sites)}), product_distribution.csv ({len(prod)}), "
+          f"qc_issues.csv ({len(qcrows)})")
 
     try:
         from openpyxl import Workbook
@@ -278,7 +302,10 @@ def cmd_compile(a):
         return
     wb = Workbook()
     wb.remove(wb.active)
-    sheets = [("README", [{"note": thermo.__doc__ + (thermo.pathway_table.__doc__ if C.RUN_RA_TS else "")}]), ("Reactions", rx), ("DET_barriers", det)]
+    sheets = [("README", [{"note": thermo.__doc__ + (thermo.pathway_table.__doc__ if C.RUN_RA_TS else "")
+                                     + descriptors.__doc__}]),
+              ("Molecular_descriptors", mol), ("Site_descriptors", sites),
+              ("Product_distribution", prod), ("Reactions", rx), ("DET_barriers", det)]
     if C.RUN_RA_TS:
         sheets += [("TS_barriers", ts), ("Pathway_comparison", path)]
     sheets += [

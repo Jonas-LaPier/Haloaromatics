@@ -10,7 +10,7 @@ from .geomtools import distance, dot, norm, sub, unit, xyz
 
 
 def expected_terminations(stage_kind, species):
-    if stage_kind == "am1" or stage_kind == "tsscan":
+    if stage_kind in ("am1", "tsscan", "sp"):
         return 1
     if species.is_atom:
         return 1

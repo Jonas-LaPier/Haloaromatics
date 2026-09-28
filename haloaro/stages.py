@@ -6,11 +6,19 @@ am1                 AM1 pre-optimisation of every molecular species
 <level>             Opt+Freq at each level in config.LEVELS (geometry read from AM1 chk)
 tsscan_<level>      relaxed C-X scan on the radical anion (TS guess), per config.TS_LEVELS
 ts_<level>          Opt=TS + Freq from the scan maximum
+sp_<level>          single points on the optimised geometries of <level> (config.SP_LEVELS):
+                      <P>__pop     parent at its own geometry, population analysis
+                      <P>__vA      anion (-1, doublet) at the neutral geometry  (vertical EA, Fukui f+)
+                      <P>__vC      cation (+1, doublet) at the neutral geometry (vertical IE)
+                      <P>_RA__pop  radical anion at its own geometry, population analysis
+                      <P>_RA__vN   neutral at the radical-anion geometry        (4-point lambda_i)
+                    every job: Pop=(Hirshfeld,NBORead) with $NBO BNDIDX $END (CM5 charges,
+                    Hirshfeld spin densities, Wiberg bond indices)
 """
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import config as C
@@ -26,7 +34,7 @@ CALCS = "calcs"   # relative to project root; .gjf paths are relative to ROOT
 @dataclass
 class Stage:
     name: str
-    kind: str          # am1 | optfreq | tsscan | ts
+    kind: str          # am1 | optfreq | tsscan | ts | sp
     level: str | None
 
     @property
@@ -53,6 +61,8 @@ def all_stages():
     for lvl in C.TS_LEVELS:
         st[f"tsscan_{lvl}"] = Stage(f"tsscan_{lvl}", "tsscan", lvl)
         st[f"ts_{lvl}"] = Stage(f"ts_{lvl}", "ts", lvl)
+    for lvl in C.SP_LEVELS:
+        st[f"sp_{lvl}"] = Stage(f"sp_{lvl}", "sp", lvl)
     return st
 
 
@@ -61,6 +71,7 @@ GROUPS = {
     "optfreq": list(C.LEVELS),
     "tsscan": [f"tsscan_{l}" for l in C.TS_LEVELS],
     "ts": [f"ts_{l}" for l in C.TS_LEVELS],
+    "sp": [f"sp_{l}" for l in C.SP_LEVELS],
 }
 GROUPS["all"] = list(STAGES)
 
@@ -78,6 +89,35 @@ def resolve(names):
 SPECIES, REACTIONS = build_all(C.HALOGENS, include_ts=C.RUN_RA_TS)
 RXN_BY_TS = {r.ts: r for r in REACTIONS}
 
+NBO_TAIL = "$NBO BNDIDX $END"
+SP_ROLES = {  # role: (source kind, charge, mult)
+    "pop": (None, None, None),
+    "vA": ("parent", -1, 2),
+    "vC": ("parent", +1, 2),
+    "vN": ("radical_anion", 0, 1),
+}
+
+
+def _sp_jobs():
+    out = {}
+    for n, s in SPECIES.items():
+        if s.kind == "parent":
+            roles = ["pop", "vA", "vC"]
+        elif s.kind == "radical_anion":
+            roles = ["pop", "vN"]
+        else:
+            continue
+        for role in roles:
+            _, q, m = SP_ROLES[role]
+            q = s.charge if q is None else q
+            m = s.mult if m is None else m
+            out[f"{n}__{role}"] = replace(s, name=f"{n}__{role}", kind="sp", charge=q, mult=m,
+                                          meta={**s.meta, "src": n, "src_kind": s.kind, "role": role})
+    return out
+
+
+SP_JOBS = _sp_jobs()
+
 
 def jobs(stage):
     """List of (job_name, Species, site)."""
@@ -85,6 +125,8 @@ def jobs(stage):
         return [(n, s, None) for n, s in SPECIES.items() if s.kind != "ts" and not s.is_atom]
     if stage.kind == "optfreq":
         return [(n, s, None) for n, s in SPECIES.items() if s.kind != "ts"]
+    if stage.kind == "sp":
+        return [(n, s, None) for n, s in SP_JOBS.items()]
     return [(r.ts, SPECIES[r.ts], r.site) for r in REACTIONS]
 
 
@@ -127,6 +169,8 @@ def _route(stage, species, opt_opts=(), extra=(), geom_check=False, guess_read=F
             parts.append(_kw("Opt", ["ModRedundant", "MaxCycles=100"] + list(opt_opts)))
         elif stage.kind == "ts":
             parts += [_kw("Opt", ["TS", "CalcFC", "NoEigenTest", "MaxCycles=150"] + list(opt_opts)), "Freq"]
+        elif stage.kind == "sp":
+            parts.append("SP")
         parts.append(f"{lvl['method']}/{lvl['basis']}")
         if lvl["solv"]:
             parts.append(lvl["solv"])
@@ -134,6 +178,13 @@ def _route(stage, species, opt_opts=(), extra=(), geom_check=False, guess_read=F
             parts.append(C.DFT_EXTRA)
         if stage.kind in ("tsscan", "ts"):
             parts.append("NoSymm")
+        if stage.kind == "sp":
+            parts.append("Pop=(Hirshfeld,NBORead)")
+            if species.meta.get("role") != "pop":
+                # vertical states of symmetric rings put the extra/missing electron in a
+                # degenerate orbital: let the SCF break symmetry, with a robust fallback
+                parts += ["NoSymm", scf or "SCF=XQC"]
+                scf = None
         if scf:
             parts.append(scf)
     if geom_check:
@@ -182,8 +233,20 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
     if own_chk:  # restart from this job's own checkpoint (last geometry + wfn)
         link0 = _link0(stage, job)
         route = _rt(species, opt_opts, geom_check=True, guess_read=True)
-        tail = retry.get("tail", "")
+        tail = retry.get("tail", NBO_TAIL if stage.kind == "sp" else "")
         return _gjf(link0, route, title, species, tail=tail)
+
+    if stage.kind == "sp":
+        src_stage = STAGES[stage.level]
+        src = species.meta["src"]
+        p, flags = _load_ok(src_stage, src, SPECIES[src])
+        if species.meta["src_kind"] == "radical_anion" and any(
+                f.startswith("RA_dissociated") for f in flags):
+            raise Skip(f"{src} is not bound at {stage.level}: no radical-anion geometry")
+        role = species.meta["role"]
+        return _gjf(_link0(stage, job, oldchk=src_stage.chk(src)),
+                    _rt(species, geom_check=True, guess_read=(role == "pop")),
+                    title, species, tail=NBO_TAIL)
 
     if stage.kind == "am1":
         return _gjf(_link0(stage, job), _rt(species, opt_opts),

@@ -36,6 +36,19 @@ by the substituents in site order.
 | `b3lyp_gas`, `b3lyp_smd`, `m062x_gas`, `m062x_smd` (group `optfreq`) | Opt + Freq, 6-311++G(d), gas and SMD(water) | `Geom=Check` from AM1 chk |
 | `tsscan_m062x_gas`, `tsscan_m062x_smd` (group `tsscan`) | relaxed C–X scan of ArX•⁻ (16 × 0.08 Å) | DFT radical-anion minimum, X tilted 15° out of plane |
 | `ts_m062x_gas`, `ts_m062x_smd` (group `ts`) | Opt=(TS,CalcFC,NoEigenTest) + Freq | highest point of the scan |
+| `sp_<level>` for each opt/freq level (group `sp`) | single points with `Pop=(Hirshfeld,NBORead)` and Wiberg bond indices; 123 jobs per level (below) | `Geom=Check` from the opt/freq chk |
+
+Single-point jobs, run for each parent P:
+
+| job | state | geometry | gives |
+|---|---|---|---|
+| `P__pop` | neutral | neutral | CM5/Hirshfeld charges, Wiberg C–X |
+| `P__vA` | anion (−1, doublet) | neutral | vertical EA, Fukui f⁺, spin density |
+| `P__vC` | cation (+1, doublet) | neutral | vertical IE |
+| `P_RA__pop` | radical anion | radical anion | spin density, charges, Wiberg C–X |
+| `P_RA__vN` | neutral | radical anion | four-point λᵢ |
+
+Benzene has only the first three. Radical anions that dissociated have no `P_RA__*` jobs.
 
 Barriers are computed for two pathways. `compile` compares them in `pathway_comparison.csv`.
 ## Pathway 1, stepwise: TS for C–X cleavage in the radical anion
@@ -73,8 +86,10 @@ now includes the Cl• and Br• atoms.
 
 At each potential E in `DET_POTENTIALS_V`:
 
-- **ET step:** ΔG_ET(E) = F(E − E°_ET). Its barrier ΔG‡_ET(E) = (λ₀/4)(1 + ΔG_ET/λ₀)²,
-  from Marcus theory (outer-sphere only).
+- **ET step:** ΔG_ET(E) = F(E − E°_ET). Its barrier ΔG‡_ET(E) = (λ/4)(1 + ΔG_ET/λ)², from
+  Marcus theory, with λ = λ₀ + λᵢ. λ₀ is the outer-sphere term from the Savéant section.
+  λᵢ is the inner-sphere term from Nelsen's four-point method (`sp` stage), taken from the
+  gas-phase level of the same functional by default (`LAMBDA_I_FROM_GAS`).
 - **Stepwise barrier:** ΔG‡_step(E) = max(ΔG‡_ET(E), max(ΔG_ET(E), 0) + ΔG‡_frag). The
   rate-limiting step is either the electron transfer or the C–X cleavage of a
   pre-equilibrated radical anion.
@@ -98,6 +113,7 @@ python3 hx.py status optfreq
 
 python3 hx.py generate tsscan && python3 hx.py submit tsscan   # needs the m062x_* radical anions
 python3 hx.py generate ts     && python3 hx.py submit ts       # from the scan maxima
+python3 hx.py generate sp     && python3 hx.py submit sp       # single points (any time after optfreq)
 
 python3 hx.py scrape all      # logs -> results/raw/<stage>.csv
 python3 hx.py compile         # -> results/*.csv and results/Haloaromatics_results.xlsx
@@ -150,6 +166,26 @@ Details:
 - `ts_barriers.csv`: stepwise ΔG‡ and ΔE‡ = TS − ArX•⁻, ΔG‡ relative to ArX + e⁻, imaginary frequency, QC flags
 - `pathway_comparison.csv`: E°_ET, E°_DET, λ₀, ΔG‡_frag and ΔG₀‡, plus the stepwise and concerted ΔG‡ and the favored pathway at each potential
 - `det_barriers.csv`: C–X bond enthalpy and free energy (at this level and in gas phase), E°_DET, radius a, λ₀, ΔG₀‡, and ΔG‡ and α at each potential in `DET_POTENTIALS_V`
+- `molecular_descriptors.csv`: one row per level × parent:
+  - HOMO, LUMO and gap
+  - Koopmans and ΔSCF values of μ, η and ω (electrophilicity)
+  - vertical and adiabatic EA, vertical IE
+  - λ_N, λ_A and λᵢ
+  - dipole moment, isotropic polarizability and van der Waals radius
+  - ΔG_ET and E°_ET
+  - the most favorable site's ΔG for each reaction
+- `site_descriptors.csv`: one row per level × unique C–X bond, for regioselectivity:
+  - structure: halogens ortho, meta and para to the site
+  - parent: r(C–X), CM5 and Hirshfeld charges, Wiberg C–X
+  - vertical anion: Fukui f⁺ on C, X and C+X, spin density
+  - relaxed radical anion: r(C–X), elongation, out-of-plane angle of X, spin density,
+    charges, Wiberg C–X
+  - site energetics: ΔG_1e, ΔG_frag, ΔG_2e, BDE, Savéant ΔG₀‡, stepwise ΔG‡_frag, and the
+    pKa of the ArH C–H formed at the site (SMD levels, direct scheme)
+  - `rank_*` columns: each site's rank within its parent (1 = most reactive by that descriptor)
+- `product_distribution.csv`: predicted fraction of mono-dehalogenation at each site, from
+  degeneracy × exp(−ΔG‡/RT) using the stepwise TS, the concerted barrier, and the combined
+  stepwise + concerted rate at each potential
 - `qc_issues.csv`: every job whose status is not `ok`
 - `Haloaromatics_results.xlsx`: all of the above as sheets, plus the constants used
 
@@ -168,7 +204,7 @@ Details:
 config.py            methods, solvent, resources, constants
 hx.py                command-line driver
 haloaro/             species.py (enumeration/naming), stages.py (input writers, retry),
-                     parse.py (log parser), qc.py, thermo.py, geomtools.py
+                     parse.py (log parser), qc.py, thermo.py, descriptors.py, geomtools.py
 slurm/g16_array.sbatch
 calcs/<stage>/{inputs,logs,chks}/   manifests in calcs/<stage>/
 results/

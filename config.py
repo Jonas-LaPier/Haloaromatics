@@ -54,6 +54,13 @@ SCAN_STEP_SIZE = 0.08    # Angstrom per step (total +1.28 A from the RA minimum)
 OOP_ANGLE_DEG = 15.0     # out-of-plane tilt of X applied to the start geometry
                          # (breaks planarity so pi*/sigma* states can mix)
 
+# Single-point stage (vertical anion/cation/neutral + population analysis) on the
+# optimised geometries of these levels. At SMD levels the vertical energies use
+# equilibrium solvation; lambda_i for the pathway comparison is taken from the gas-phase
+# counterpart of each functional when LAMBDA_I_FROM_GAS is True.
+SP_LEVELS = list(LEVELS)
+LAMBDA_I_FROM_GAS = True
+
 # Extra route keywords common to all DFT jobs
 DFT_EXTRA = "Int=UltraFine"
 AM1_SCF = "SCF=XQC"                    # route: #p Opt AM1 <AM1_SCF>
@@ -71,6 +78,7 @@ RESOURCES = {
     "optfreq": {"cpus": 8, "mem_gb": 16, "time": "0-12:00:00"},
     "tsscan":  {"cpus": 8, "mem_gb": 16, "time": "1-00:00:00"},
     "ts":      {"cpus": 8, "mem_gb": 16, "time": "1-00:00:00"},
+    "sp":      {"cpus": 8, "mem_gb": 16, "time": "0-04:00:00"},
 }
 
 # --------------------------------------------------------------------------- #

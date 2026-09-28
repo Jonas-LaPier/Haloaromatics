@@ -149,6 +149,50 @@ def scan_points(lines):
     return pts
 
 
+def hirshfeld(lines):
+    """Last Hirshfeld/CM5 table -> list of dicts {sym, q_H, s_H, q_CM5}."""
+    start = None
+    for i, l in enumerate(lines):
+        if l.startswith(" Hirshfeld charges, spin densities, dipoles, and CM5 charges"):
+            start = i
+    if start is None:
+        return None
+    out = []
+    for l in lines[start + 2:]:
+        p = l.split()
+        if len(p) < 8 or not p[0].isdigit():
+            break
+        out.append({"sym": p[1], "q_H": float(p[2]), "s_H": float(p[3]), "q_CM5": float(p[7])})
+    return out
+
+
+def wiberg(lines, natoms):
+    """Wiberg bond index matrices (NAO basis). Returns the list of matrices found in the
+    last NBO run (1 for closed shell; alpha and beta for open shell)."""
+    mats, i = [], 0
+    starts = [k for k, l in enumerate(lines) if "Wiberg bond index matrix in the NAO basis" in l]
+    for k in starts:
+        m = [[0.0] * natoms for _ in range(natoms)]
+        cols = None
+        j = k + 1
+        while j < len(lines):
+            l = lines[j]
+            if "Totals by atom" in l or "Atom-atom overlap" in l or "Wiberg bond index matrix" in l:
+                break
+            t = l.split()
+            if t and t[0] == "Atom" and all(x.isdigit() for x in t[1:]):
+                cols = [int(x) - 1 for x in t[1:]]
+            elif cols and t and t[0].endswith(".") and t[0][:-1].isdigit():
+                r = int(t[0][:-1]) - 1
+                vals = [float(x) for x in t[2:2 + len(cols)]]
+                for c, v in zip(cols, vals):
+                    if r < natoms and c < natoms:
+                        m[r][c] = v
+            j += 1
+        mats.append(m)
+    return mats
+
+
 def parse_log(path):
     path = Path(path)
     text = path.read_text(errors="ignore")
@@ -181,6 +225,29 @@ def parse_log(path):
     d["lowest_freq"] = min(freqs) if freqs else None
     d["mode1"] = mode1
     d["geometry"] = last_geometry(lines)
+    d["hirshfeld"] = hirshfeld(lines)
+    nat = len(d["geometry"]) if d["geometry"] else 0
+    wb = wiberg(lines, nat) if nat else []
+    if wb:
+        # closed shell: one matrix; open shell: alpha + beta spin matrices -> sum
+        d["wiberg"] = wb[0] if len(wb) == 1 or (d["mult"] or 1) == 1 else \
+            [[a + b for a, b in zip(ra, rb)] for ra, rb in zip(wb[-2], wb[-1])]
+    else:
+        d["wiberg"] = None
+    dip = None
+    for k, l in enumerate(lines):
+        if l.startswith(" Dipole moment (field-independent basis, Debye)") and k + 1 < len(lines):
+            m = re.search(r"Tot=\s*(-?\d+\.\d+)", lines[k + 1])
+            if m:
+                dip = float(m.group(1))
+    d["dipole_D"] = dip
+    pol = None
+    for l in lines:
+        if l.strip().startswith("Exact polarizability:"):
+            v = [float(x) for x in RE_NUM.findall(l.split(":", 1)[1])]
+            if len(v) >= 6:
+                pol = (v[0] + v[2] + v[5]) / 3
+    d["polar_iso_bohr3"] = pol
     secs = 0.0
     for m in RE_ELAPSED.finditer(text):
         dd, hh, mm, ss = m.groups()
