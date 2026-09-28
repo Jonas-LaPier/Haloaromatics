@@ -41,9 +41,9 @@ LAMBDA0_KCAL = None          # set a number to override the computed lambda0 for
 RADIUS_PROBE_A = 0.0         # added to the van der Waals sphere-equivalent radius a
 DET_POTENTIALS_V = [-1.0, -1.5, -2.0]        # electrode/donor potentials (V vs SHE) for dG‡(E)
 
-# Stepwise radical-anion TS workflow (tsscan_* / ts_* stages). Disabled in favour of the
-# Saveant concerted model above; set True to re-enable those stages.
-RUN_RA_TS = False
+# Stepwise radical-anion TS workflow (tsscan_* / ts_* stages): ArX.- -> [Ar...X]‡.- -> Ar. + X-.
+# Run alongside the Saveant concerted analysis; compile compares the two pathways.
+RUN_RA_TS = True
 
 # Levels used for the radical-anion C-X cleavage TS (only if RUN_RA_TS)
 TS_LEVELS = ["m062x_gas", "m062x_smd"] if RUN_RA_TS else []

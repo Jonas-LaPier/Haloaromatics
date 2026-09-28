@@ -248,6 +248,7 @@ def cmd_compile(a):
     rx = thermo.reaction_table(tab, REACTIONS, SPECIES)
     ts = thermo.ts_table(tab, REACTIONS) if C.RUN_RA_TS else []
     det = thermo.det_table(tab, REACTIONS)
+    path = thermo.pathway_table(rx, ts, det) if C.RUN_RA_TS else []
     lumo = [{"level": r["level"], "name": r["name"], "halogen": r["halogen"], "n_X": r["n_X"],
              "LUMO_Eh": r["lumo"], "LUMO_eV": r["lumo_eV"], "HOMO_Eh": r["homo"], "status": r["status"]}
             for r in species_rows if r["kind"] == "parent" and r["level"] in C.LEVELS]
@@ -264,6 +265,7 @@ def cmd_compile(a):
     write_csv(RESULTS / "det_barriers.csv", det)
     if C.RUN_RA_TS:
         write_csv(RESULTS / "ts_barriers.csv", ts)
+        write_csv(RESULTS / "pathway_comparison.csv", path)
     write_csv(RESULTS / "qc_issues.csv", qcrows)
     print(f"wrote results/species_energies.csv ({len(species_rows)}), parent_LUMO.csv ({len(lumo)}), "
           f"reactions.csv ({len(rx)}), det_barriers.csv ({len(det)}), qc_issues.csv ({len(qcrows)})")
@@ -276,9 +278,9 @@ def cmd_compile(a):
         return
     wb = Workbook()
     wb.remove(wb.active)
-    sheets = [("README", [{"note": thermo.__doc__}]), ("Reactions", rx), ("DET_barriers", det)]
+    sheets = [("README", [{"note": thermo.__doc__ + (thermo.pathway_table.__doc__ if C.RUN_RA_TS else "")}]), ("Reactions", rx), ("DET_barriers", det)]
     if C.RUN_RA_TS:
-        sheets.append(("TS_barriers", ts))
+        sheets += [("TS_barriers", ts), ("Pathway_comparison", path)]
     sheets += [
               ("Parent_LUMO", lumo), ("Species", species_rows), ("QC_issues", qcrows),
               ("Constants", consts)]

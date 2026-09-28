@@ -226,3 +226,63 @@ def ts_table(tab, reactions):
                 "RA_flags": tab.get((level, rx.radical_anion), {}).get("flags", ""),
             })
     return out
+
+
+def pathway_table(rx_rows, ts_rows, det_rows):
+    """Stepwise (via ArX.-) vs concerted (Saveant) reduction barriers at each potential.
+
+    Stepwise, at electrode/donor potential E (SMD TS levels only):
+        dG_ET(E)    = F (E - E°_ET)                       ArX + e- -> ArX.-
+        dG‡_ET(E)   = (lambda0/4)(1 + dG_ET(E)/lambda0)^2  Marcus, outer-sphere only
+        dG‡_frag    = G(TS) - G(ArX.-)                    from the ts_* stage
+        dG‡_step(E) = max( dG‡_ET(E),  max(dG_ET(E), 0) + dG‡_frag )
+    i.e. the rate-limiting step is either the electron transfer or the C-X cleavage of the
+    radical anion (pre-equilibrium with ArX if dG_ET(E) > 0).
+    Concerted:  dG‡_conc(E) from det_table.
+    The pathway with the lower barrier at E is reported as 'favored'.
+    """
+    key = lambda r: (r["level"], r["parent"], r["site"])  # noqa: E731
+    rx = {key(r): r for r in rx_rows}
+    ts = {key(r): r for r in ts_rows}
+    out = []
+    for d in det_rows:
+        level = d["level"]
+        if level not in C.TS_LEVELS or not _solvated(level):
+            continue
+        k = key(d)
+        r, t = rx.get(k, {}), ts.get(k, {})
+        lam, e_et = d.get("lambda0_kcal"), r.get("E_ET_V")
+        frag = t.get("dG_act_kcal (TS - ArX.-)")
+        ra_unbound = "RA_dissociated" in (r.get("RA_flags") or "")
+        ts_ok = t.get("ts_status") in ("ok", "warn")
+        row = {"level": level, "halogen": d["halogen"], "parent": d["parent"], "site": d["site"],
+               "degeneracy": d["degeneracy"], "E0_ET_V (ArX/ArX.-)": e_et,
+               "E0_DET_V (ArX/Ar.+X-)": d.get("E0_DET_V"), "lambda0_kcal": lam,
+               "dG_act_frag_kcal (TS - ArX.-)": frag if ts_ok else None,
+               "dG0_act_concerted_kcal": d.get("dG0_act_kcal (intrinsic)")}
+        notes = []
+        if ra_unbound:
+            notes.append("radical anion unbound at this level: concerted only")
+        elif not ts_ok:
+            notes.append(f"stepwise TS unavailable ({t.get('ts_status', 'missing')})")
+        for E in C.DET_POTENTIALS_V:
+            conc = d.get(f"dG_act_kcal @ {E:+.2f} V")
+            step = None
+            if not ra_unbound and ts_ok and None not in (lam, e_et, frag):
+                dget = C.FARADAY_KCAL * (E - e_et)
+                x = max(0.0, 1 + dget / lam)
+                step = max(lam / 4 * x * x, max(dget, 0.0) + frag)
+            row[f"dG_act_stepwise_kcal @ {E:+.2f} V"] = _r(step)
+            row[f"dG_act_concerted_kcal @ {E:+.2f} V"] = conc
+            if step is None and conc is None:
+                fav = None
+            elif step is None:
+                fav = "concerted"
+            elif conc is None:
+                fav = "stepwise"
+            else:
+                fav = "stepwise" if step < conc else "concerted"
+            row[f"favored @ {E:+.2f} V"] = fav
+        row["notes"] = "; ".join(notes)
+        out.append(row)
+    return out
