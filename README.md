@@ -12,20 +12,19 @@ The code enumerates every symmetry-unique isomer and every symmetry-unique C–X
 | species | charge / mult | count |
 |---|---|---|
 | parents ArX: benzene + 12 chloro + 12 bromo | 0 / 1 | 25 |
-| radical anions ArX•⁻ (reactant for the C–X cleavage TS) | −1 / 2 | 24 |
+| radical anions ArX•⁻ (stepwise electron transfer) | −1 / 2 | 24 |
 | aryl radicals Ar• (one per unique C–X bond; phenyl shared by both series) | 0 / 2 | 39 |
 | aryl carbanions Ar⁻ | −1 / 1 | 39 |
 | Cl⁻, Br⁻ | −1 / 1 | 2 |
-| C–X cleavage transition states | −1 / 2 | 40 |
+| Cl•, Br• atoms (for C–X bond energies) | 0 / 2 | 2 |
 
 That gives 40 unique dehalogenation reactions (20 per halogen). The reaction table
 also lists each reaction's degeneracy, meaning how many equivalent C–X bonds it covers.
 
 **Names.** `ClBz_124` is 1,2,4-trichlorobenzene and `ClBz_124_RA` is its radical anion.
 `ClPh_24_rad` and `ClPh_24_anion` are the 2,4-dichlorophenyl radical and carbanion,
-with the radical/anion carbon numbered C1. `TS_ClBz_124_x4` is the TS for breaking the
-C4–Cl bond in `ClBz_124_RA`. Atom order in every input is C1…C6 followed by the
-substituents in site order.
+with the radical/anion carbon numbered C1. Atom order in every input is C1…C6 followed
+by the substituents in site order.
 
 ## Stages
 
@@ -33,15 +32,30 @@ substituents in site order.
 |---|---|---|
 | `am1` | Opt AM1 (every molecular species) | idealised planar ring |
 | `b3lyp_gas`, `b3lyp_smd`, `m062x_gas`, `m062x_smd` (group `optfreq`) | Opt + Freq, 6-311++G(d), gas and SMD(water) | `Geom=Check` from AM1 chk |
-| `tsscan_m062x_gas`, `tsscan_m062x_smd` (group `tsscan`) | relaxed C–X scan of ArX•⁻ (16 × 0.08 Å) | DFT radical-anion minimum, X tilted 15° out of plane |
-| `ts_m062x_gas`, `ts_m062x_smd` (group `ts`) | Opt=(TS,CalcFC,NoEigenTest) + Freq | highest point of the scan |
+## Activation barriers: Savéant concerted dissociative electron transfer
 
-**TS level.** M06-2X/6-311++G(d) was chosen because it is well benchmarked for barrier
-heights, the diffuse functions are needed for the anions, and the reactant radical anions
-are already computed at that level in the `optfreq` stage. The out-of-plane tilt breaks
-planar symmetry so the π* and σ* states can mix. Otherwise the planar scan crosses
-between the two states at a cusp and never reaches a smooth saddle point. To change
-the TS level, edit `TS_LEVELS` in `config.py`.
+Barriers are computed for the concerted pathway starting from the **neutral parent**,
+ArX + e⁻ → [ArX]‡ → Ar• + X⁻, using Savéant's model (J. Am. Chem. Soc. 1987, 109, 6788;
+Acc. Chem. Res. 1993, 26, 455). No extra Gaussian jobs are needed beyond `optfreq`, which
+now includes the Cl• and Br• atoms.
+
+- **D**, the C–X bond energy of the neutral parent: D = H(Ar•) + H(X•) − H(ArX). The X•
+  energies include the ²P₃/₂ spin–orbit correction (Cl 0.84, Br 3.51 kcal/mol). Set
+  `SAVEANT_D = "G"` in `config.py` to use the bond dissociation free energy (BDFE) instead.
+- **λ₀**, the solvent reorganization energy, from the Marcus–Hush one-sphere model for an
+  electrode reaction: λ₀ = e²/(8πε₀a)·(1/ε_op − 1/ε_s). Here a is the radius of a sphere
+  with the parent's van der Waals volume (Bondi radii, computed from the optimized
+  geometry). Set `LAMBDA0_MODEL = "homogeneous"` for a molecular electron donor, or
+  `LAMBDA0_KCAL` to impose a value.
+- **Intrinsic barrier** ΔG₀‡ = (D + λ₀)/4, the barrier at E = E°_DET.
+- **Barrier at potential E:** ΔG‡(E) = ΔG₀‡(1 + ΔG°(E)/4ΔG₀‡)², with ΔG°(E) = F(E − E°_DET).
+  E°_DET is the one-electron potential `E_1e`. It is evaluated at each potential in
+  `DET_POTENTIALS_V`, along with the transfer coefficient α.
+- The full barriers are reported for the SMD levels only. The gas levels give bond energies only.
+
+The stepwise radical-anion TS stages (a C–X scan of ArX•⁻, then Opt=TS) are still in the
+code but switched off. Set `RUN_RA_TS = True` in `config.py` to bring back the
+`tsscan_*` and `ts_*` stages.
 
 ## Workflow on Sherlock
 
@@ -55,9 +69,6 @@ python3 hx.py retry am1       # rebuild failed inputs with automatic fixes, then
 python3 hx.py generate optfreq      # only species whose AM1 job passed QC
 python3 hx.py submit optfreq
 python3 hx.py status optfreq
-
-python3 hx.py generate tsscan && python3 hx.py submit tsscan
-python3 hx.py generate ts     && python3 hx.py submit ts
 
 python3 hx.py scrape all      # logs -> results/raw/<stage>.csv
 python3 hx.py compile         # -> results/*.csv and results/Haloaromatics_results.xlsx
@@ -87,12 +98,11 @@ Details:
 - Normal termination count (2 for Opt+Freq)
 - Charge, multiplicity and atom count match the species
 - A stationary point was found and the free energy is present
-- The number of imaginary frequencies is 0 for minima and 1 for TSs
+- There are no imaginary frequencies at minima (exactly 1 for TSs, if `RUN_RA_TS` is on)
 - ⟨S²⟩ is within 0.10 of 0.75 for doublets
-- **Radical anion dissociated**: C–X > 2.3 Å (Cl) or 2.5 Å (Br). If a radical anion has
-  no bound minimum at a level, cleavage is barrierless there, so no TS scan is generated
-  and the reaction row is flagged.
-- The TS imaginary mode contains the C–X stretch
+- **Radical anion dissociated**: C–X > 2.3 Å (Cl) or 2.5 Å (Br). The radical anion has no
+  bound minimum at that level, so reduction there is concerted. Its row in the reaction
+  table is flagged.
 
 ## Output (`results/`)
 
@@ -107,7 +117,7 @@ Details:
   - `2e_HDH` ArX + H⁺ + 2e⁻ → ArH + X⁻ (hydrodehalogenation)
 
   Each gives ΔG in kcal/mol and E° in V vs SHE (SMD levels only).
-- `ts_barriers.csv`: ΔG‡ and ΔE‡ = TS − ArX•⁻, ΔG‡ relative to ArX + e⁻, imaginary frequency, QC flags
+- `det_barriers.csv`: C–X bond enthalpy and free energy (at this level and in gas phase), E°_DET, radius a, λ₀, ΔG₀‡, and ΔG‡ and α at each potential in `DET_POTENTIALS_V`
 - `qc_issues.csv`: every job whose status is not `ok`
 - `Haloaromatics_results.xlsx`: all of the above as sheets, plus the constants used
 

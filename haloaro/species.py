@@ -15,6 +15,7 @@ Radical anions   ClBz_12_RA                   (ArX.-, charge -1, doublet)
 Aryl radicals    Ph_rad, ClPh_2_rad, ...      (vacant carbon = C1; lowest locants)
 Aryl carbanions  Ph_anion, ClPh_2_anion, ...  (charge -1, singlet)
 Halides          Cl_anion, Br_anion
+Halogen atoms    Cl_rad, Br_rad                (X., doublet; for C-X bond energies)
 Transition state TS_ClBz_12_x1                (C-X bond at parent locant 1 breaking
                                                 in the radical anion)
 """
@@ -108,7 +109,7 @@ def aryl_name(ring, kind):
 @dataclass
 class Species:
     name: str
-    kind: str            # parent | radical_anion | aryl_radical | aryl_anion | halide | ts
+    kind: str            # parent | radical_anion | aryl_radical | aryl_anion | halide | halogen_atom | ts
     charge: int
     mult: int
     ring: tuple | None   # substituent tuple (None for atoms)
@@ -187,7 +188,7 @@ def unique_parents(halogen):
     return seen
 
 
-def build_all(halogens=HALOGENS):
+def build_all(halogens=HALOGENS, include_ts=True):
     """Return (species dict name->Species, list[Dehalogenation])."""
     sp: dict[str, Species] = {}
     rxns: list[Dehalogenation] = []
@@ -199,6 +200,7 @@ def build_all(halogens=HALOGENS):
 
     for x in halogens:
         add(Species(f"{x}_anion", "halide", -1, 1, None, x, 1, element=x))
+        add(Species(f"{x}_rad", "halogen_atom", 0, 2, None, x, 1, element=x))
         for pname, ring in unique_parents(x).items():
             n = ring.count(x)
             add(Species(pname, "parent", 0, 1, ring, x, n))
@@ -223,8 +225,9 @@ def build_all(halogens=HALOGENS):
                 add(Species(an_name, "aryl_anion", -1, 1, aring, hal, n - 1))
                 hring = tuple("H" if j == site - 1 else ring[j] for j in range(6))
                 ts_name = f"TS_{pname}_x{site}"
-                add(Species(ts_name, "ts", -1, 2, ring, x, n,
-                            meta={"parent": pname, "site": site}))
+                if include_ts:
+                    add(Species(ts_name, "ts", -1, 2, ring, x, n,
+                                meta={"parent": pname, "site": site}))
                 rxns.append(Dehalogenation(
                     parent=pname, radical_anion=f"{pname}_RA", site=site,
                     degeneracy=len(sites), halogen=x, aryl_radical=rad_name,

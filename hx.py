@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT))
 
 import config as C  # noqa: E402
 from haloaro import qc, thermo  # noqa: E402
+from haloaro.geomtools import sphere_radius  # noqa: E402
 from haloaro.parse import parse_log  # noqa: E402
 from haloaro.stages import (REACTIONS, SPECIES, STAGES, Skip, build_input, jobs,  # noqa: E402
                             resolve, retry_fixes)
@@ -46,11 +47,19 @@ def write_csv(path, rows, fields=None):
     if not rows:
         path.write_text("")
         return
-    fields = fields or list(rows[0].keys())
+    fields = fields or _union_keys(rows)
     with path.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
+
+
+def _union_keys(rows):
+    keys = {}
+    for r in rows:
+        for k in r:
+            keys.setdefault(k, None)
+    return list(keys)
 
 
 def read_csv(path):
@@ -214,6 +223,8 @@ def cmd_scrape(a):
                 "lumo_eV": round(lumo * C.HARTREE_TO_EV, 4) if lumo is not None else None,
                 "S2": p.get("S2"), "n_imag": p.get("n_imag"), "lowest_freq": p.get("lowest_freq"),
                 "wall_hours": p.get("wall_hours"),
+                "radius_A": (round(sphere_radius(p["geometry"]), 3)
+                             if sp.kind == "parent" and p.get("geometry") and qc.usable(status) else None),
             })
         write_csv(RAW / f"{sn}.csv", rows)
         c = Counter(r["status"] for r in rows)
@@ -235,22 +246,27 @@ def cmd_compile(a):
         raise SystemExit("No scraped data. Run: python3 hx.py scrape all")
 
     rx = thermo.reaction_table(tab, REACTIONS, SPECIES)
-    ts = thermo.ts_table(tab, REACTIONS)
+    ts = thermo.ts_table(tab, REACTIONS) if C.RUN_RA_TS else []
+    det = thermo.det_table(tab, REACTIONS)
     lumo = [{"level": r["level"], "name": r["name"], "halogen": r["halogen"], "n_X": r["n_X"],
              "LUMO_Eh": r["lumo"], "LUMO_eV": r["lumo_eV"], "HOMO_Eh": r["homo"], "status": r["status"]}
             for r in species_rows if r["kind"] == "parent" and r["level"] in C.LEVELS]
     qcrows = [r for r in species_rows if r["status"] != "ok"]
     consts = [{"constant": k, "value": getattr(C, k)} for k in (
         "BASIS", "SOLVENT", "TEMPERATURE", "STD_STATE_CORR_KCAL", "G_ELECTRON_KCAL", "E_ABS_SHE_V",
-        "G_PROTON_GAS_KCAL", "DG_SOLV_PROTON_KCAL", "HARTREE_TO_KCAL", "FARADAY_KCAL")]
+        "G_PROTON_GAS_KCAL", "DG_SOLV_PROTON_KCAL", "HARTREE_TO_KCAL", "FARADAY_KCAL",
+        "SAVEANT_D", "SPIN_ORBIT_KCAL", "EPS_STATIC", "EPS_OPTICAL", "LAMBDA0_MODEL",
+        "LAMBDA0_KCAL", "RADIUS_PROBE_A", "DET_POTENTIALS_V")]
 
     write_csv(RESULTS / "species_energies.csv", species_rows)
     write_csv(RESULTS / "parent_LUMO.csv", lumo)
     write_csv(RESULTS / "reactions.csv", rx)
-    write_csv(RESULTS / "ts_barriers.csv", ts)
+    write_csv(RESULTS / "det_barriers.csv", det)
+    if C.RUN_RA_TS:
+        write_csv(RESULTS / "ts_barriers.csv", ts)
     write_csv(RESULTS / "qc_issues.csv", qcrows)
     print(f"wrote results/species_energies.csv ({len(species_rows)}), parent_LUMO.csv ({len(lumo)}), "
-          f"reactions.csv ({len(rx)}), ts_barriers.csv ({len(ts)}), qc_issues.csv ({len(qcrows)})")
+          f"reactions.csv ({len(rx)}), det_barriers.csv ({len(det)}), qc_issues.csv ({len(qcrows)})")
 
     try:
         from openpyxl import Workbook
@@ -260,19 +276,23 @@ def cmd_compile(a):
         return
     wb = Workbook()
     wb.remove(wb.active)
-    sheets = [("README", [{"note": thermo.__doc__}]), ("Reactions", rx), ("TS_barriers", ts),
+    sheets = [("README", [{"note": thermo.__doc__}]), ("Reactions", rx), ("DET_barriers", det)]
+    if C.RUN_RA_TS:
+        sheets.append(("TS_barriers", ts))
+    sheets += [
               ("Parent_LUMO", lumo), ("Species", species_rows), ("QC_issues", qcrows),
               ("Constants", consts)]
     for title, rows in sheets:
         ws = wb.create_sheet(title)
         if not rows:
             continue
-        hdr = list(rows[0].keys())
+        hdr = _union_keys(rows)
         ws.append(hdr)
         for c in ws[1]:
             c.font = Font(bold=True)
         for r in rows:
-            ws.append([_num(r.get(h)) for h in hdr])
+            ws.append([_num(r.get(h)) if not isinstance(r.get(h), (list, dict, tuple)) else str(r.get(h))
+                       for h in hdr])
         ws.freeze_panes = "A2"
         for col in ws.columns:
             ws.column_dimensions[col[0].column_letter].width = min(

@@ -75,7 +75,7 @@ def resolve(names):
     return out
 
 
-SPECIES, REACTIONS = build_all(C.HALOGENS)
+SPECIES, REACTIONS = build_all(C.HALOGENS, include_ts=C.RUN_RA_TS)
 RXN_BY_TS = {r.ts: r for r in REACTIONS}
 
 

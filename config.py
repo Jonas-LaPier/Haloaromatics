@@ -20,11 +20,33 @@ LEVELS = {
     "m062x_smd": {"method": "M062X",  "basis": BASIS, "solv": SMD},
 }
 
-# Levels used for the C-X cleavage transition states (ArX.- -> [Ar...X]‡.- -> Ar. + X-).
-# M06-2X is a well benchmarked meta-hybrid for barrier heights; diffuse functions
-# are required for the anions. Reactant radical anions come from the same level
-# in the opt/freq stage so barriers are internally consistent.
-TS_LEVELS = ["m062x_gas", "m062x_smd"]
+# --------------------------------------------------------------------------- #
+# Activation barriers: Saveant concerted dissociative electron transfer (DET)
+#     ArX + e-  ->  [ArX]‡  ->  Ar. + X-          (one step, from the NEUTRAL parent)
+#     dG0‡ = (D + lambda0) / 4                        intrinsic barrier
+#     dG‡(E) = dG0‡ * (1 + dG°(E) / (4 dG0‡))^2      dG°(E) = F (E - E°_DET) ... see thermo.py
+# D = homolytic C-X bond energy of the neutral parent (ArX -> Ar. + X.), from the
+# opt/freq stage (needs the X. atoms). lambda0 = solvent reorganisation (Marcus-Hush
+# one-sphere model, electrode reaction). Computed for the SMD levels only.
+# J.-M. Saveant, J. Am. Chem. Soc. 1987, 109, 6788; Acc. Chem. Res. 1993, 26, 455.
+# --------------------------------------------------------------------------- #
+SAVEANT_D = "H"              # "H": bond dissociation enthalpy (Saveant's D); "G": BDFE
+SPIN_ORBIT_KCAL = {"Cl": 0.84, "Br": 3.51}   # 2P3/2 ground-state stabilisation of X.
+                                             # (1/3 of the 2P splitting), subtracted from G, H of X.
+EPS_STATIC = 78.36           # water (must match SOLVENT)
+EPS_OPTICAL = 1.777          # n^2 of water
+LAMBDA0_MODEL = "electrode"  # "electrode": e^2/(8 pi eps0 a)(1/eps_op - 1/eps_s) (image term neglected)
+                             # "homogeneous": 2x electrode value (self-exchange-like, donor of equal size)
+LAMBDA0_KCAL = None          # set a number to override the computed lambda0 for every compound
+RADIUS_PROBE_A = 0.0         # added to the van der Waals sphere-equivalent radius a
+DET_POTENTIALS_V = [-1.0, -1.5, -2.0]        # electrode/donor potentials (V vs SHE) for dG‡(E)
+
+# Stepwise radical-anion TS workflow (tsscan_* / ts_* stages). Disabled in favour of the
+# Saveant concerted model above; set True to re-enable those stages.
+RUN_RA_TS = False
+
+# Levels used for the radical-anion C-X cleavage TS (only if RUN_RA_TS)
+TS_LEVELS = ["m062x_gas", "m062x_smd"] if RUN_RA_TS else []
 
 # Relaxed C-X scan used to locate the TS guess
 SCAN_STEPS = 16          # number of steps

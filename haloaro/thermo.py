@@ -15,6 +15,15 @@ Reactions (one row per symmetry-unique C-X bond, degeneracy listed):
     2e_an   ArX + 2e-        -> Ar-  + X-        (to carbanion)
     2e_HDH  ArX + H+ + 2e-   -> ArH  + X-        (hydrodehalogenation)
     TS      dG‡ = G(TS) - G(ArX.-);  dG‡(from ArX + e-) = G(TS) - G(ArX) - G(e-)
+            (only if config.RUN_RA_TS)
+
+Saveant concerted dissociative electron transfer (det_table), from the neutral parent:
+    ArX + e-(E) -> Ar. + X-          E°_DET = E_1e above
+    D       = H(Ar.) + H(X.) - H(ArX)            (or G for BDFE; X. includes spin-orbit)
+    lambda0 = N_A e^2/(8 pi eps0 a) (1/eps_op - 1/eps_s)    a = vdW sphere radius of ArX
+    dG0‡    = (D + lambda0) / 4                  intrinsic barrier (at E = E°_DET)
+    dG°(E)  = F (E - E°_DET)
+    dG‡(E)  = dG0‡ (1 + dG°(E) / (4 dG0‡))^2      alpha(E) = 0.5 (1 + dG°(E) / (4 dG0‡))
 """
 from __future__ import annotations
 
@@ -36,6 +45,93 @@ def _G(tab, level, name):
     if _solvated(level):
         g += C.STD_STATE_CORR_KCAL
     return g
+
+
+def _val(tab, level, name, key="G"):
+    """G or H (kcal/mol) with std-state (G, solvated) and spin-orbit (X. atoms) corrections."""
+    row = tab.get((level, name))
+    if not row or row.get(key) in (None, "") or row.get("status") not in ("ok", "warn"):
+        return None
+    v = float(row[key]) * K
+    if key == "G" and _solvated(level):
+        v += C.STD_STATE_CORR_KCAL
+    if row.get("kind") == "halogen_atom":
+        v -= C.SPIN_ORBIT_KCAL.get(row.get("halogen"), 0.0)
+    return v
+
+
+def gas_counterpart(level):
+    L = C.LEVELS[level]
+    for k, v in C.LEVELS.items():
+        if v["method"] == L["method"] and v["basis"] == L["basis"] and v["solv"] is None:
+            return k
+    return None
+
+
+def lambda0_kcal(radius_A):
+    """Marcus-Hush one-sphere outer-sphere reorganisation energy (kcal/mol)."""
+    if C.LAMBDA0_KCAL is not None:
+        return C.LAMBDA0_KCAL
+    if radius_A in (None, ""):
+        return None
+    a = float(radius_A) + C.RADIUS_PROBE_A
+    coul = 332.0637  # N_A e^2 / (4 pi eps0) in kcal A / mol
+    lam = coul / (2 * a) * (1 / C.EPS_OPTICAL - 1 / C.EPS_STATIC)
+    return 2 * lam if C.LAMBDA0_MODEL == "homogeneous" else lam
+
+
+def det_table(tab, reactions):
+    ge = C.G_ELECTRON_KCAL
+    out = []
+    for level in C.LEVELS:
+        gas = gas_counterpart(level)
+        for rx in reactions:
+            X, Xr = f"{rx.halogen}_anion", f"{rx.halogen}_rad"
+
+            def bond(lv, key):
+                return _dg([_val(tab, lv, rx.aryl_radical, key), _val(tab, lv, Xr, key)],
+                           [_val(tab, lv, rx.parent, key)])
+
+            D_H, D_G = bond(level, "H"), bond(level, "G")
+            D_H_gas = bond(gas, "H") if gas else None
+            D_G_gas = bond(gas, "G") if gas else None
+            row = {"level": level, "halogen": rx.halogen, "parent": rx.parent, "site": rx.site,
+                   "degeneracy": rx.degeneracy, "aryl_radical": rx.aryl_radical,
+                   "BDE_kcal (dH, this level)": _r(D_H), "BDFE_kcal (dG, this level)": _r(D_G),
+                   "BDE_gas_kcal": _r(D_H_gas), "BDFE_gas_kcal": _r(D_G_gas)}
+            dg1 = _dg([_val(tab, level, rx.aryl_radical), _val(tab, level, X)],
+                      [_val(tab, level, rx.parent), ge])
+            E0 = _E(dg1, 1, level)
+            row["dG_DET_kcal (ArX + e- -> Ar. + X-)"] = _r(dg1)
+            row["E0_DET_V"] = _r(E0, 3)
+            radius = tab.get((level, rx.parent), {}).get("radius_A")
+            lam = lambda0_kcal(radius) if _solvated(level) else None
+            D = D_H if C.SAVEANT_D == "H" else D_G
+            row["radius_A"] = radius
+            row["lambda0_kcal"] = _r(lam)
+            flags = []
+            if _solvated(level) and D is not None and lam is not None:
+                g0 = (D + lam) / 4
+                row["dG0_act_kcal (intrinsic)"] = _r(g0)
+                for E in C.DET_POTENTIALS_V:
+                    if E0 is None:
+                        continue
+                    dgE = C.FARADAY_KCAL * (E - E0)
+                    f = 1 + dgE / (4 * g0)
+                    if f < 0:  # beyond the activationless limit of the quadratic law
+                        flags.append(f"E={E}: past activationless limit")
+                        f = 0.0
+                    row[f"dG_act_kcal @ {E:+.2f} V"] = _r(g0 * f * f)
+                    row[f"alpha @ {E:+.2f} V"] = _r(0.5 * f, 3)
+            else:
+                row["dG0_act_kcal (intrinsic)"] = None
+                if not _solvated(level):
+                    flags.append("gas level: bond energies only (no solvent reorganisation)")
+            miss = [n for n in (rx.parent, rx.aryl_radical, Xr, X) if _val(tab, level, n) is None]
+            row["missing_species"] = ";".join(miss)
+            row["flags"] = "; ".join(flags)
+            out.append(row)
+    return out
 
 
 def _proton(level):
