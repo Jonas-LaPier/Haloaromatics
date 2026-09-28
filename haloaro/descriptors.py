@@ -126,7 +126,10 @@ def molecular_table(tab, species, rx_rows):
             li = None if lN is None or lA is None else lN + lA
             d.update({"lambda_N_kcal": _r(lN, 2), "lambda_A_kcal": _r(lA, 2),
                       "lambda_i_kcal": _r(li, 2), "lambda_i_eV": _r(li / 23.0605 if li is not None else None)})
-            lam_i[(level, name)] = li
+            # lambda_i is an electron-transfer reorganisation energy only for an intact pi
+            # radical anion; for a bent sigma-type RA it mostly measures C-X cleavage
+            d["RA_state"] = ra_row.get("RA_state")
+            lam_i[(level, name)] = li if ra_row.get("RA_state") == "pi" else None
             d["RA_bound"] = None if not ra_row else ra_ok
             d["RA_S2"] = _f(ra_row.get("S2"))
 

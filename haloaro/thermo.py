@@ -273,7 +273,8 @@ def pathway_table(rx_rows, ts_rows, det_rows, lam_i=None):
                "dG0_act_concerted_kcal": d.get("dG0_act_kcal (intrinsic)")}
         notes = []
         if li is None and not ra_unbound:
-            notes.append("lambda_i unavailable (sp stage): ET barrier uses lambda0 only")
+            notes.append("lambda_i not used (sp stage missing, or RA is not a pi radical anion): "
+                         "ET barrier uses lambda0 only")
         if ra_unbound:
             notes.append("radical anion unbound at this level: concerted only")
         elif not ts_ok:

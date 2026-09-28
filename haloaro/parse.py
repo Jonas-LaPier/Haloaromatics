@@ -168,8 +168,8 @@ def hirshfeld(lines):
 
 
 def wiberg(lines, natoms):
-    """Wiberg bond index matrices (NAO basis). Returns the list of matrices found in the
-    last NBO run (1 for closed shell; alpha and beta for open shell)."""
+    """Wiberg bond index matrices (NAO basis), in the order printed: total density first,
+    then (open shell only) alpha and beta spin orbitals."""
     mats, i = [], 0
     starts = [k for k, l in enumerate(lines) if "Wiberg bond index matrix in the NAO basis" in l]
     for k in starts:
@@ -231,12 +231,9 @@ def parse_log(path):
     d["hirshfeld"] = hirshfeld(lines)
     nat = len(d["geometry"]) if d["geometry"] else 0
     wb = wiberg(lines, nat) if nat else []
-    if wb:
-        # closed shell: one matrix; open shell: alpha + beta spin matrices -> sum
-        d["wiberg"] = wb[0] if len(wb) == 1 or (d["mult"] or 1) == 1 else \
-            [[a + b for a, b in zip(ra, rb)] for ra, rb in zip(wb[-2], wb[-1])]
-    else:
-        d["wiberg"] = None
+    # NBO prints the total-density Wiberg matrix first; open-shell runs then repeat it for
+    # the alpha and beta spin orbitals (spin-resolved values, not halves of the total)
+    d["wiberg"] = wb[0] if wb else None
     dip = None
     for k, l in enumerate(lines):
         if l.startswith(" Dipole moment (field-independent basis, Debye)") and k + 1 < len(lines):

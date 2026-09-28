@@ -53,8 +53,15 @@ def evaluate(parsed, species, stage_kind, site=None):
             fail = True
         want = 1 if stage_kind == "ts" else 0
         if parsed["freqs"] and parsed["n_imag"] != want:
-            flags.append(f"n_imag={parsed['n_imag']} (want {want}; lowest {parsed['lowest_freq']:.1f})")
-            fail = True
+            imag = sorted(f for f in parsed["freqs"] if f < 0)
+            # tiny imaginary modes of floppy radical anions are integration-grid noise
+            extra = imag[want:] if parsed["n_imag"] > want else imag
+            if parsed["n_imag"] > want and all(abs(f) < C.IMAG_TOL_CM for f in extra):
+                flags.append(f"small_imag {', '.join(f'{f:.1f}' for f in extra)} cm-1")
+                warn = True
+            else:
+                flags.append(f"n_imag={parsed['n_imag']} (want {want}; lowest {parsed['lowest_freq']:.1f})")
+                fail = True
 
     # spin contamination
     # (skipped for AM1: semi-empirical UHF radicals are routinely contaminated and the
