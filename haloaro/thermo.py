@@ -169,7 +169,10 @@ def reaction_table(tab, reactions, species):
             prow = tab.get((level, rx.parent), {})
             lumo = prow.get("lumo_eV")
             e = {}
-            # a dissociated "radical anion" is an Ar...X- complex, not ArX.-: no ET/frag values
+            # a dissociated "radical anion" is an Ar...X- complex, not ArX.-: no ET/frag values.
+            # The *_any columns keep the lowest RA-state energy whatever its structure (as used
+            # for the published QSAR), for correlation work.
+            g_ra_any = g["RA"]
             if "RA_dissociated" in (tab.get((level, rx.radical_anion), {}).get("flags") or ""):
                 g["RA"] = None
             e["ET"] = _dg([g["RA"]], [g["ArX"], ge])
@@ -192,6 +195,9 @@ def reaction_table(tab, reactions, species):
                 "dG_ET_kcal": _r(e["ET"]), "E_ET_V": _r(_E(e["ET"], 1, level), 3),
                 "dG_1e_kcal": _r(e["1e"]), "E_1e_V": _r(_E(e["1e"], 1, level), 3),
                 "dG_frag_kcal": _r(e["frag"]),
+                "dG_ET_any_kcal": _r(_dg([g_ra_any], [g["ArX"], ge])),
+                "dG_frag_any_kcal": _r(_dg([g["Ar_rad"], g["X"]], [g_ra_any])),
+                "RA_state": tab.get((level, rx.radical_anion), {}).get("RA_state"),
                 "dG_rad_red_kcal": _r(e["rad"]), "E_rad_red_V": _r(_E(e["rad"], 1, level), 3),
                 "dG_2e_carbanion_kcal": _r(e["2e_an"]), "E_2e_carbanion_V": _r(_E(e["2e_an"], 2, level), 3),
                 "dG_2e_HDH_kcal": _r(e["2e_HDH"]), "E_2e_HDH_V": _r(_E(e["2e_HDH"], 2, level), 3),

@@ -31,10 +31,10 @@ os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 
 import config as C  # noqa: E402
-from haloaro import descriptors, qc, thermo  # noqa: E402
+from haloaro import correlations, descriptors, qc, thermo  # noqa: E402
 from haloaro.geomtools import sphere_radius  # noqa: E402
 from haloaro.parse import parse_log  # noqa: E402
-from haloaro.stages import (REACTIONS, SPECIES, STAGES, Skip, build_input, jobs,  # noqa: E402
+from haloaro.stages import (REACTIONS, SPECIES, STAGES, Skip, build_input, jobs, resources,  # noqa: E402
                             resolve, retry_fixes)
 
 RESULTS = Path("results")
@@ -136,27 +136,33 @@ def cmd_submit(a):
                 _, status, _ = job_state(st, job, sp, site)
                 if status != "incomplete":
                     continue
-            todo.append(str(ip))
+            todo.append((str(ip), job))
         if not todo:
             print(f"[{sn}] nothing to submit")
             continue
+        # one array per resource class (e.g. benzenes vs. diphenyl ethers)
+        groups = {}
+        for ip, job in todo:
+            r = resources(st, job)
+            groups.setdefault((r["cpus"], r["mem_gb"], r["time"]), []).append(ip)
         stamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-        man = st.dir / f"manifest_{stamp}.txt"
-        if not a.dry_run:
-            man.write_text("\n".join(todo) + "\n")
-        r = C.RESOURCES[st.kind]
-        cmd = ["sbatch", f"--job-name={sn}", f"--array=1-{len(todo)}%{C.ARRAY_THROTTLE}",
-               f"--cpus-per-task={r['cpus']}", f"--mem={r['mem_gb']}G", f"--time={r['time']}"]
-        if C.PARTITION:
-            cmd.append(f"--partition={C.PARTITION}")
-        cmd += ["slurm/g16_array.sbatch", str(man)]
-        print(f"[{sn}] {len(todo)} jobs -> {man}")
-        print("   " + " ".join(cmd))
-        if not a.dry_run:
-            if shutil.which("sbatch") is None:
-                print("   sbatch not found (not on Sherlock?) - run the command above manually")
-            else:
-                subprocess.run(cmd, check=False)
+        for gi, ((cpus, mem, time), ips) in enumerate(sorted(groups.items())):
+            suffix = "" if len(groups) == 1 else f"_{gi + 1}"
+            man = st.dir / f"manifest_{stamp}{suffix}.txt"
+            if not a.dry_run:
+                man.write_text("\n".join(ips) + "\n")
+            cmd = ["sbatch", f"--job-name={sn}", f"--array=1-{len(ips)}%{C.ARRAY_THROTTLE}",
+                   f"--cpus-per-task={cpus}", f"--mem={mem}G", f"--time={time}"]
+            if C.PARTITION:
+                cmd.append(f"--partition={C.PARTITION}")
+            cmd += ["slurm/g16_array.sbatch", str(man)]
+            print(f"[{sn}] {len(ips)} jobs -> {man}")
+            print("   " + " ".join(cmd))
+            if not a.dry_run:
+                if shutil.which("sbatch") is None:
+                    print("   sbatch not found (not on Sherlock?) - run the command above manually")
+                else:
+                    subprocess.run(cmd, check=False)
 
 
 def cmd_status(a):
@@ -282,6 +288,7 @@ def cmd_compile(a):
     path = thermo.pathway_table(rx, ts, det, lam_i) if C.RUN_RA_TS else []
     sites = descriptors.site_table(tab, atoms, SPECIES, REACTIONS, rx, ts, det)
     prod = descriptors.product_distribution(sites, det, path)
+    corr, cdata, cpairs, cpred = correlations.run(mol, rx, det, path, ts, sites)
     lumo = [{"level": r["level"], "name": r["name"], "halogen": r["halogen"], "n_X": r["n_X"],
              "LUMO_Eh": r["lumo"], "LUMO_eV": r["lumo_eV"], "HOMO_Eh": r["homo"], "status": r["status"]}
             for r in species_rows if r["kind"] == "parent" and r["level"] in C.LEVELS]
@@ -299,6 +306,13 @@ def cmd_compile(a):
     write_csv(RESULTS / "molecular_descriptors.csv", mol)
     write_csv(RESULTS / "site_descriptors.csv", sites)
     write_csv(RESULTS / "product_distribution.csv", prod)
+    if corr:
+        write_csv(RESULTS / "correlations.csv", corr)
+        write_csv(RESULTS / "correlation_data.csv", cdata)
+        write_csv(RESULTS / "correlation_pairs.csv", cpairs)
+        write_csv(RESULTS / "correlation_predictions.csv", cpred)
+        figs = correlations.plots(corr, cdata, RESULTS / "plots")
+        print(f"wrote results/correlations*.csv ({len(corr)} fits)" + (f" and {len(figs)} plots in results/plots/" if figs else ""))
     if C.RUN_RA_TS:
         write_csv(RESULTS / "ts_barriers.csv", ts)
         write_csv(RESULTS / "pathway_comparison.csv", path)
@@ -317,9 +331,11 @@ def cmd_compile(a):
     wb = Workbook()
     wb.remove(wb.active)
     sheets = [("README", [{"note": thermo.__doc__ + (thermo.pathway_table.__doc__ if C.RUN_RA_TS else "")
-                                     + descriptors.__doc__}]),
+                                     + descriptors.__doc__ + correlations.__doc__}]),
               ("Molecular_descriptors", mol), ("Site_descriptors", sites),
-              ("Product_distribution", prod), ("Reactions", rx), ("DET_barriers", det)]
+              ("Product_distribution", prod), ("Correlations", corr), ("Correlation_data", cdata),
+              ("Correlation_pairs", cpairs), ("Correlation_predictions", cpred),
+              ("Reactions", rx), ("DET_barriers", det)]
     if C.RUN_RA_TS:
         sheets += [("TS_barriers", ts), ("Pathway_comparison", path)]
     sheets += [
