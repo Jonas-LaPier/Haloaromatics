@@ -251,6 +251,11 @@ Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et 
 - The published 1,3-dibromobenzene value (0.79 ± 0.074) is per day; it was divided by 24
   to give 0.0329 h⁻¹, consistent with the 21 h half-life.
 
+Five chlorobenzenes (group `chlorobenzene`: hexa-, penta-, 1,2,4,5-tetra-, 1,2- and
+1,4-dichlorobenzene), also measured at −2.0 V vs SHE, were added on 2026-09-29 from
+unpublished data (citation to be confirmed; no standard errors). They enter the `all`
+fits and are predicted by the bromobenzene fit, together with the PBDEs.
+
 The `dG_ET_any` and `dG_frag_any` columns use the lowest radical-anion energy whatever
 its structure (π, bent σ or dissociated), as in the published QSAR. The plain `dG_ET` and
 `dG_frag` columns leave dissociated radical anions blank.
