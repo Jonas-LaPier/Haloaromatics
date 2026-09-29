@@ -253,7 +253,7 @@ Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et 
 
 Five chlorobenzenes (group `chlorobenzene`: hexa-, penta-, 1,2,4,5-tetra-, 1,2- and
 1,4-dichlorobenzene), also measured at −2.0 V vs SHE, were added on 2026-09-29 from
-unpublished data (citation to be confirmed; no standard errors). They enter the `all`
+unpublished data (no standard errors yet). They enter the `all`
 fits and are predicted by the bromobenzene fit, together with the PBDEs.
 
 The `dG_ET_any` and `dG_frag_any` columns use the lowest radical-anion energy whatever
