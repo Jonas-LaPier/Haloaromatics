@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-SYMBOLS = {1: "H", 6: "C", 17: "Cl", 35: "Br"}
+SYMBOLS = {1: "H", 6: "C", 8: "O", 17: "Cl", 35: "Br"}
 
 RE_SCF = re.compile(r"SCF Done:\s+E\((\S+)\)\s+=\s+(-?\d+\.\d+)")
 RE_G = re.compile(r"Sum of electronic and thermal Free Energies=\s+(-?\d+\.\d+)")

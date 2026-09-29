@@ -8,6 +8,13 @@ resources. Every stage writes to calcs/<stage>/{inputs,logs,chks}.
 # Chemistry
 # --------------------------------------------------------------------------- #
 HALOGENS = ("Cl", "Br")
+
+# Polybrominated diphenyl ethers: label -> (ring A Br locants, ring B Br locants).
+# Their hydrodebromination products (e.g., BDE-28, BDE-17 from BDE-47) are added as
+# neutral species automatically. Conformers are not searched: each starts from a twisted
+# C2-like geometry, so consider a CREST/xTB conformer search before trusting small
+# energy differences.
+PBDES = {"BDE-47": ("24", "24"), "BDE-99": ("245", "24")}
 BASIS = "6-311++G(d)"
 SOLVENT = "Water"                      # used for every *_smd level
 SMD = f"SCRF=(SMD,Solvent={SOLVENT})"
@@ -40,6 +47,12 @@ LAMBDA0_MODEL = "electrode"  # "electrode": e^2/(8 pi eps0 a)(1/eps_op - 1/eps_s
 LAMBDA0_KCAL = None          # set a number to override the computed lambda0 for every compound
 RADIUS_PROBE_A = 0.0         # added to the van der Waals sphere-equivalent radius a
 DET_POTENTIALS_V = [-1.0, -1.5, -2.0]        # electrode/donor potentials (V vs SHE) for dG‡(E)
+
+# Experimental rate constants for correlation (compile -> results/correlations.csv)
+EXPERIMENTAL_KOBS = "data/experimental_kobs.csv"
+EXP_POTENTIAL_V = -2.0          # potential at which the kobs were measured (V vs SHE; uncompensated, no iR-drop compensation)
+CORR_FIT_GROUP = "bromobenzene" # fit on this group, then predict the others (e.g. PBDEs)
+CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal")]   # two-descriptor MLR models
 
 # Stepwise radical-anion TS workflow (tsscan_* / ts_* stages): ArX.- -> [Ar...X]‡.- -> Ar. + X-.
 # Run alongside the Saveant concerted analysis; compile compares the two pathways.
@@ -79,6 +92,14 @@ RESOURCES = {
     "tsscan":  {"cpus": 8, "mem_gb": 16, "time": "1-00:00:00"},
     "ts":      {"cpus": 8, "mem_gb": 16, "time": "1-00:00:00"},
     "sp":      {"cpus": 8, "mem_gb": 16, "time": "0-04:00:00"},
+}
+# Larger resources for diphenyl ethers (23-25 atoms, 4-5 Br)
+RESOURCES_DPE = {
+    "am1":     {"cpus": 1, "mem_gb": 2,  "time": "0-01:00:00"},
+    "optfreq": {"cpus": 16, "mem_gb": 48, "time": "2-00:00:00"},
+    "tsscan":  {"cpus": 16, "mem_gb": 48, "time": "2-00:00:00"},
+    "ts":      {"cpus": 16, "mem_gb": 48, "time": "2-00:00:00"},
+    "sp":      {"cpus": 16, "mem_gb": 32, "time": "0-08:00:00"},
 }
 
 # --------------------------------------------------------------------------- #

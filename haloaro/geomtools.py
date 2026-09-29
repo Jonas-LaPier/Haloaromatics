@@ -40,9 +40,14 @@ def distance(atoms, i, j):
     return norm(sub(xyz(atoms[i - 1]), xyz(atoms[j - 1])))
 
 
-def tilt_out_of_plane(atoms, c_idx, x_idx, angle_deg):
-    """Rotate substituent x about carbon c out of the ring plane by angle_deg."""
-    ring = [xyz(a) for a in atoms[:6]]
+def _ring_pts(atoms, ring_idx):
+    return [xyz(atoms[i - 1]) for i in (ring_idx or range(1, 7))]
+
+
+def tilt_out_of_plane(atoms, c_idx, x_idx, angle_deg, ring_idx=None):
+    """Rotate substituent x about carbon c out of the ring plane by angle_deg.
+    ring_idx: 1-based indices of the six ring atoms (default atoms 1-6)."""
+    ring = _ring_pts(atoms, ring_idx)
     n = unit(cross(sub(ring[2], ring[0]), sub(ring[4], ring[0])))
     c, x = xyz(atoms[c_idx - 1]), xyz(atoms[x_idx - 1])
     v = sub(x, c)
@@ -55,9 +60,9 @@ def tilt_out_of_plane(atoms, c_idx, x_idx, angle_deg):
     return out
 
 
-def oop_angle(geom, ci, xi):
+def oop_angle(geom, ci, xi, ring_idx=None):
     """Angle (deg) between the C-X bond (1-based atom indices) and the ring plane."""
-    ring = [xyz(a) for a in geom[:6]]
+    ring = _ring_pts(geom, ring_idx)
     n = unit(cross(sub(ring[2], ring[0]), sub(ring[4], ring[0])))
     v = unit(sub(xyz(geom[xi - 1]), xyz(geom[ci - 1])))
     return math.degrees(math.asin(min(1.0, abs(dot(v, n)))))
@@ -76,7 +81,7 @@ def displace_along(atoms, mode, amp=0.15):
     return [(a[0],) + add(xyz(a), scale(v, amp / m)) for a, v in zip(atoms, mode)]
 
 
-BONDI = {"H": 1.20, "C": 1.70, "Cl": 1.75, "Br": 1.85}
+BONDI = {"H": 1.20, "C": 1.70, "O": 1.52, "Cl": 1.75, "Br": 1.85}
 
 
 def vdw_volume(atoms, spacing=0.2):

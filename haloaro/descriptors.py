@@ -74,15 +74,6 @@ def _diff(a, b, scale=1.0):
     return None if a is None or b is None else (a - b) * scale
 
 
-def ring_neighbours(ring, site, halogen):
-    """Counts of halogens ortho / meta / para to ring site (1-based)."""
-    i = site - 1
-    o = sum(ring[(i + d) % 6] == halogen for d in (1, -1))
-    m = sum(ring[(i + d) % 6] == halogen for d in (2, -2))
-    p = int(ring[(i + 3) % 6] == halogen)
-    return o, m, p
-
-
 # --------------------------------------------------------------------------- #
 # Molecular descriptors
 # --------------------------------------------------------------------------- #
@@ -161,10 +152,12 @@ def site_table(tab, atoms, species, reactions, rx_rows, ts_rows, det_rows):
         for r in reactions:
             P = species[r.parent]
             ci, xi = P.atom_index(r.site)
-            o, m, p = ring_neighbours(P.ring, r.site, r.halogen)
+            o, m, p = P.neighbours(r.site, r.halogen)
+            ring = P.ring_atoms(r.site)
             d = {"level": level, "halogen": r.halogen, "parent": r.parent, "n_X": P.n_hal,
                  "site": r.site, "degeneracy": r.degeneracy, "aryl_radical": r.aryl_radical,
-                 "ArH_product": r.hydro_product, "n_ortho_X": o, "n_meta_X": m, "n_para_X": p}
+                 "ArH_product": r.hydro_product, "n_ortho_X": o, "n_meta_X": m, "n_para_X": p,
+                 "ortho_to_ether": (str(r.site).rstrip("p") in ("2", "6")) if P.skeleton == "dpe" else None}
 
             ga = _atoms(atoms, level, r.parent)
             if ga:
@@ -194,7 +187,7 @@ def site_table(tab, atoms, species, reactions, rx_rows, ts_rows, det_rows):
                 d["r_CX_RA_A"] = _r(rr, 4)
                 if "r_CX_parent_A" in d:
                     d["dr_CX_RA_A"] = _r(rr - d["r_CX_parent_A"], 4)
-                d["oop_X_RA_deg"] = _r(oop_angle(gr["geometry"], ci, xi), 2)
+                d["oop_X_RA_deg"] = _r(oop_angle(gr["geometry"], ci, xi, ring), 2)
             rp = _atoms(atoms, level, f"{r.radical_anion}__pop")
             hR = rp.get("hirshfeld") if rp else None
             if hR:

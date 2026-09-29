@@ -109,12 +109,11 @@ def ra_state(geom, species):
     """
     X = species.halogen
     best = None
-    for s in range(1, 7):
-        ci, xi = species.atom_index(s)
-        if xi and geom[xi - 1][0] == X:
+    for s, ci, xi, ring in species.cx_sites(X):
+        if geom[xi - 1][0] == X:
             r = distance(geom, ci, xi)
             if best is None or r > best[2]:
-                best = (s, ci, r, oop_angle(geom, ci, xi))
+                best = (s, ci, r, oop_angle(geom, ci, xi, ring))
     if best is None:
         return "pi", None, None, None
     s, ci, r, oop = best

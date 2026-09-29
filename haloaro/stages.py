@@ -86,7 +86,7 @@ def resolve(names):
     return out
 
 
-SPECIES, REACTIONS = build_all(C.HALOGENS, include_ts=C.RUN_RA_TS)
+SPECIES, REACTIONS = build_all(C.HALOGENS, include_ts=C.RUN_RA_TS, pbdes=C.PBDES)
 RXN_BY_TS = {r.ts: r for r in REACTIONS}
 
 NBO_TAIL = "$NBO BNDIDX $END"
@@ -101,6 +101,8 @@ SP_ROLES = {  # role: (source kind, charge, mult)
 def _sp_jobs():
     out = {}
     for n, s in SPECIES.items():
+        if s.kind == "parent" and s.meta.get("product_only"):
+            continue   # hydrodehalogenation products that are not themselves studied
         if s.kind == "parent":
             roles = ["pop", "vA", "vC"]
         elif s.kind == "radical_anion":
@@ -137,12 +139,20 @@ class Skip(Exception):
     pass
 
 
-def _res(stage):
+def resources(stage, job=None):
+    """Slurm/Gaussian resources for a job; diphenyl ethers use config.RESOURCES_DPE."""
+    sp = SPECIES.get(job) or SP_JOBS.get(job) if job else None
+    if sp is not None and sp.skeleton == "dpe" and stage.kind in C.RESOURCES_DPE:
+        return C.RESOURCES_DPE[stage.kind]
     return C.RESOURCES[stage.kind]
 
 
+def _res(stage, job=None):
+    return resources(stage, job)
+
+
 def _link0(stage, job, oldchk=None):
-    r = _res(stage)
+    r = _res(stage, job)
     mem = max(1, int(r["mem_gb"] * C.MEM_FRACTION))
     s = f"%nprocshared={r['cpus']}\n%mem={mem}GB\n"
     if oldchk:
@@ -280,7 +290,7 @@ def build_input(stage, job, species, site, retry=None, ignore_prereq=False):
         if any(f.startswith("RA_dissociated") for f in flags):
             raise Skip(f"{rxn.radical_anion} is not bound at {stage.level} ({flags}); "
                        "C-X cleavage is barrierless from the RA at this level")
-        geom = tilt_out_of_plane(p["geometry"], ci, xi, C.OOP_ANGLE_DEG)
+        geom = tilt_out_of_plane(p["geometry"], ci, xi, C.OOP_ANGLE_DEG, species.ring_atoms(site))
         tail = f"B {ci} {xi} S {C.SCAN_STEPS} {C.SCAN_STEP_SIZE:.3f}"
         return _gjf(_link0(stage, job), _rt(species, opt_opts),
                     title, species, geom, tail=tail)

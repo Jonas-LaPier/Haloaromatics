@@ -11,22 +11,36 @@ The code enumerates every symmetry-unique isomer and every symmetry-unique C–X
 
 | species | charge / mult | count |
 |---|---|---|
-| parents ArX: benzene + 12 chloro + 12 bromo | 0 / 1 | 25 |
-| radical anions ArX•⁻ (stepwise electron transfer) | −1 / 2 | 24 |
-| aryl radicals Ar• (one per unique C–X bond; phenyl shared by both series) | 0 / 2 | 39 |
-| aryl carbanions Ar⁻ | −1 / 1 | 39 |
+| parents ArX: benzene + 12 chloro + 12 bromo + BDE-47 + BDE-99 | 0 / 1 | 27 |
+| PBDE hydrodebromination products (BDE-17, -28, -48, -49, -66, -74) | 0 / 1 | 6 |
+| radical anions ArX•⁻ (stepwise electron transfer) | −1 / 2 | 26 |
+| aryl radicals Ar• (one per unique C–X bond; phenyl shared by both series) | 0 / 2 | 46 |
+| aryl carbanions Ar⁻ | −1 / 1 | 46 |
 | Cl⁻, Br⁻ | −1 / 1 | 2 |
 | Cl•, Br• atoms (for C–X bond energies) | 0 / 2 | 2 |
-| C–X cleavage transition states of ArX•⁻ | −1 / 2 | 40 |
+| C–X cleavage transition states of ArX•⁻ | −1 / 2 | 47 |
 
-That gives 40 unique dehalogenation reactions (20 per halogen). The reaction table
-also lists each reaction's degeneracy, meaning how many equivalent C–X bonds it covers.
+That gives 47 unique dehalogenation reactions: 20 per halogen for the benzenes, plus 2
+for BDE-47 and 5 for BDE-99. The reaction table also lists each reaction's degeneracy,
+meaning how many equivalent C–X bonds it covers.
+
+**PBDEs** (`PBDES` in `config.py`) use a diphenyl-ether skeleton.
+- **Rings and sites:** rings A and B are each numbered from the ether carbon. Sites are
+  `2`–`6` in ring A and `2p`–`6p` in ring B.
+- **Names:** canonical names put the more substituted ring first (`BDE_24_24` is BDE-47,
+  `BDE_245_24` is BDE-99). An `r` marks the radical carbon (`BDE_24_2r4_rad`).
+- **Starting geometry:** a twisted C₂-like conformation (C–O–C 120°, both rings rotated
+  50°). No conformer search is done; a CREST/xTB search is recommended before
+  interpreting small energy differences.
+- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB, 2 days for opt/freq),
+  and `submit` sends them as a separate array.
 
 **Names.** `ClBz_124` is 1,2,4-trichlorobenzene and `ClBz_124_RA` is its radical anion.
 `ClPh_24_rad` and `ClPh_24_anion` are the 2,4-dichlorophenyl radical and carbanion,
 with the radical/anion carbon numbered C1. `TS_ClBz_124_x4` is the TS for breaking the
 C4–Cl bond in `ClBz_124_RA`. Atom order in every input is C1…C6 followed
-by the substituents in site order.
+by the substituents in site order. For PBDEs the order is ring A C1–C6, ring B C1–C6, O,
+then the substituents of ring A and then ring B.
 
 ## Stages
 
@@ -204,6 +218,30 @@ Details:
   degeneracy × exp(−ΔG‡/RT) using the stepwise TS, the concerted barrier, and the combined
   stepwise + concerted rate at each potential
 - `qc_issues.csv`: every job whose status is not `ok`
+- `correlations.csv`: ln(k_obs) against every compound-level descriptor at every level.
+  Each fit reports n, slope, intercept, r, R², p, RMSE, leave-one-out RMSE and Q². Two
+  fits are made per descriptor: one on the bromobenzenes (`CORR_FIT_GROUP`), which is then
+  used to predict the PBDEs, and one on all compounds. Site quantities are reduced to the
+  most favorable site (`min_*`/`max_*`) or to a degeneracy-weighted effective barrier
+  (`eff_*` = −RT ln Σ gᵢ exp(−ΔG‡ᵢ/RT)). Potential-dependent barriers are evaluated at
+  `EXP_POTENTIAL_V` (−2.0 V vs SHE; uncompensated potential, without iR-drop compensation). For barriers, `slope_x_RT` = 1 would be ideal
+  transition-state-theory behavior.
+- `correlation_data.csv`: ln(k_obs) and every descriptor, one row per compound and level
+- `correlation_predictions.csv`: predicted vs observed ln(k) for compounds outside the fit set
+- `correlation_pairs.csv`: two-descriptor models (`CORR_PAIRS`, default ΔG_ET + ΔG_frag)
+- `plots/correlations_<level>.png`: the six best single-descriptor fits for each level
+  (needs matplotlib)
+
+Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et al.,
+*Environ. Sci. Technol.* 2026, 60, 1346, Table 1. Two corrections were applied:
+- The measurements were made at −2.0 V vs SHE; all calculations and correlations use this
+  potential.
+- The published 1,3-dibromobenzene value (0.79 ± 0.074) is per day; it was divided by 24
+  to give 0.0329 h⁻¹, consistent with the 21 h half-life.
+
+The `dG_ET_any` and `dG_frag_any` columns use the lowest radical-anion energy whatever
+its structure (π, bent σ or dissociated), as in the published QSAR. The plain `dG_ET` and
+`dG_frag` columns leave dissociated radical anions blank.
 - `Haloaromatics_results.xlsx`: all of the above as sheets, plus the constants used
 
 **Conventions (edit in `config.py`):**
@@ -221,7 +259,9 @@ Details:
 config.py            methods, solvent, resources, constants
 hx.py                command-line driver
 haloaro/             species.py (enumeration/naming), stages.py (input writers, retry),
-                     parse.py (log parser), qc.py, thermo.py, descriptors.py, geomtools.py
+                     parse.py (log parser), qc.py, thermo.py, descriptors.py,
+                     correlations.py, geomtools.py
+data/experimental_kobs.csv          measured rate constants used by compile
 slurm/g16_array.sbatch
 calcs/<stage>/{inputs,logs,chks}/   manifests in calcs/<stage>/
 results/
