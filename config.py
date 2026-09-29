@@ -55,33 +55,32 @@ CORR_FIT_GROUP = "bromobenzene" # fit on this group, then predict the others (e.
 # Compound sets fitted separately (group names from EXPERIMENTAL_KOBS; "halobenzene" means
 # bromobenzene + chlorobenzene, "all" means every compound with data)
 CORR_FIT_SETS = ["bromobenzene", "chlorobenzene", "halobenzene", "all"]
-# Two-descriptor MLR models: LaPier et al. 2026 Table 2, eqs 4 x 5 and eqs 4 x 6
+# Two-descriptor MLR models: electron transfer to ArX combined with the radical-anion step
 CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal"),
               ("dG_ET_any_kcal", "min_dG_RA_2e_any_kcal")]
 
-# QSAR summary (results/qsar_summary.csv, sheet QSAR_summary): (descriptor, label, set).
-# Set "LaPier2026" reproduces Table 2 of LaPier et al., ES&T 2026, 60, 1346 (M06-2X/6-311++G(d),
-# gas phase, fitted on the 7 bromobenzenes; site quantities at the most favourable site; *_any
-# uses the lowest radical-anion energy whatever its state). Set "extended" adds the other
-# parameters expected to matter for reduction kinetics. Barriers "@ V" use EXP_POTENTIAL_V.
-QSAR_PAPER_LEVEL = "m062x_gas"
+# QSAR summary (results/qsar_summary.csv, sheet QSAR_summary): (descriptor, label, set), fitted
+# against ln(kobs) at every level and fit set. Set "thermo" holds the reduction thermochemistry
+# and frontier orbitals; set "extended" the other parameters expected to matter for reduction
+# kinetics. Site quantities use the most favourable site; *_any uses the lowest radical-anion
+# energy whatever its state. Barriers "@ V" are evaluated at EXP_POTENTIAL_V.
 _AT = f"@ {EXP_POTENTIAL_V:+.2f} V"      # suffix of potential-dependent descriptor names
 QSAR_DESCRIPTORS = [
-    ("LUMO_eV",                  "Gas-phase LUMO of ArX",                        "LaPier2026"),
-    ("LUMO_RA_eV",               "LUMO of the radical anion ArX.-",              "LaPier2026"),
-    ("min_dG_1e_kcal",           "dG eq 2: ArX + e- -> Ar. + X-",                "LaPier2026"),
-    ("min_dG_2e_carbanion_kcal", "dG eq 3: ArX + 2e- -> Ar- + X-",               "LaPier2026"),
-    ("dG_ET_any_kcal",           "dG eq 4: ArX + e- -> ArX.-",                   "LaPier2026"),
-    ("min_dG_frag_any_kcal",     "dG eq 5: ArX.- -> Ar. + X-",                   "LaPier2026"),
-    ("min_dG_RA_2e_any_kcal",    "dG eq 6: ArX.- + e- -> Ar- + X-",              "LaPier2026"),
+    ("LUMO_eV",                  "LUMO of ArX",                        "thermo"),
+    ("LUMO_RA_eV",               "LUMO of the radical anion ArX.-",              "thermo"),
+    ("min_dG_1e_kcal",           "dG ArX + e- -> Ar. + X-",                "thermo"),
+    ("min_dG_2e_carbanion_kcal", "dG ArX + 2e- -> Ar- + X-",               "thermo"),
+    ("dG_ET_any_kcal",           "dG ArX + e- -> ArX.-",                   "thermo"),
+    ("min_dG_frag_any_kcal",     "dG ArX.- -> Ar. + X-",                   "thermo"),
+    ("min_dG_RA_2e_any_kcal",    "dG ArX.- + e- -> Ar- + X-",              "thermo"),
     ("n_X",                      "number of halogens",                           "extended"),
     ("VEA_eV",                   "vertical electron affinity",                   "extended"),
     ("AEA_elec_eV",              "adiabatic electron affinity (electronic)",     "extended"),
     ("omega_dSCF_eV",            "electrophilicity index (dSCF)",                "extended"),
     ("E_ET_V",                   "E deg ArX/ArX.- (SMD levels only)",            "extended"),
-    ("dG_ET_kcal",               "dG eq 4, bound radical anions only",           "extended"),
-    ("min_dG_frag_kcal",         "dG eq 5, bound radical anions only",           "extended"),
-    ("min_dG_RA_2e_kcal",        "dG eq 6, bound radical anions only",           "extended"),
+    ("dG_ET_kcal",               "dG ArX + e- -> ArX.-, bound RA only",           "extended"),
+    ("min_dG_frag_kcal",         "dG ArX.- -> Ar. + X-, bound RA only",           "extended"),
+    ("min_dG_RA_2e_kcal",        "dG ArX.- + e- -> Ar- + X-, bound RA only",           "extended"),
     ("min_dG_2e_HDH_kcal",       "dG ArX + H+ + 2e- -> ArH + X-",                "extended"),
     ("min_dG_rad_red_kcal",      "dG Ar. + e- -> Ar-",                           "extended"),
     ("lambda_i_kcal",            "inner-sphere reorganisation energy",           "extended"),

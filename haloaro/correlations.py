@@ -9,8 +9,8 @@ One fit is reported per descriptor and compound set (config.CORR_FIT_SETS):
               line is then used to predict the remaining compounds (e.g., BDE-47, BDE-99)
     fit_set = chlorobenzene, halobenzene (bromo- + chlorobenzenes), all (every compound)
 Statistics: r, R2, p, SSE, MSE (= SSE/n), RMSE, leave-one-out RMSE and Q2.
-qsar_summary() collects the models in config.QSAR_DESCRIPTORS (LaPier et al. 2026 Table 2
-and the extended set) and the two-descriptor models in config.CORR_PAIRS.
+qsar_summary() collects the models in config.QSAR_DESCRIPTORS and the two-descriptor models
+in config.CORR_PAIRS.
 
 Site-resolved quantities are reduced to one value per compound in two ways:
     min_* / max_*  the most favourable site
@@ -312,7 +312,7 @@ def in_set(e, fit_set):
 
 def qsar_summary(corr_rows, pair_rows):
     """The fits for config.QSAR_DESCRIPTORS and CORR_PAIRS, one row per level x fit set x model,
-    in the order listed in config (LaPier et al. 2026 Table 2 first)."""
+    in the order listed in config."""
     by = {(r["level"], r["fit_set"], r["descriptor"]): r for r in corr_rows}
     label = {d: lab for d, lab, _ in C.QSAR_DESCRIPTORS}
     keep = ("n", "slope", "intercept", "r", "R2", "p", "SSE", "MSE", "RMSE", "LOO_RMSE", "Q2",
@@ -320,14 +320,14 @@ def qsar_summary(corr_rows, pair_rows):
     rows = []
     for lv in C.LEVELS:
         for fs in C.CORR_FIT_SETS:
-            base = {"level": lv, "paper_level": lv == C.QSAR_PAPER_LEVEL, "fit_set": fs}
+            base = {"level": lv, "fit_set": fs}
             for desc, lab, dset in C.QSAR_DESCRIPTORS:
                 r = by.get((lv, fs, desc))
                 rows.append({**base, "descriptor_set": dset, "model": lab, "descriptors": desc,
                              **({k: r.get(k) for k in keep} if r else {"n": 0})})
             for pr in pair_rows:
                 if pr["level"] == lv and pr["fit_set"] == fs:
-                    rows.append({**base, "descriptor_set": "LaPier2026",
+                    rows.append({**base, "descriptor_set": "MLR",
                                  "model": f"MLR: {label.get(pr['x1'], pr['x1'])} + {label.get(pr['x2'], pr['x2'])}",
                                  "descriptors": f"{pr['x1']} + {pr['x2']}",
                                  **{k: pr.get(k) for k in ("n", "R2", "adj_R2", "SSE", "MSE", "RMSE", "b0", "b1", "b2")}})
