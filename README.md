@@ -131,8 +131,15 @@ python3 hx.py generate tsscan && python3 hx.py submit tsscan   # needs the m062x
 python3 hx.py generate ts     && python3 hx.py submit ts       # from the scan maxima
 python3 hx.py generate sp     && python3 hx.py submit sp       # single points (any time after optfreq)
 
-python3 hx.py scrape all      # logs -> results/raw/<stage>.csv
-python3 hx.py compile         # -> results/*.csv and results/Haloaromatics_results.xlsx
+python3 hx.py scrape all      # logs -> results/raw/<stage>.csv; commit results/raw and push
+```
+
+`compile` runs on the Mac, because Sherlock has neither `openpyxl` nor `matplotlib` for
+python/3.12: after `git pull`, run
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install openpyxl matplotlib   # once
+.venv/bin/python hx.py compile   # -> results/*.csv, Haloaromatics_results.xlsx, results/plots/
 ```
 
 **Tip:** before submitting all 129 jobs of a new level, test one bromine species first:
@@ -250,8 +257,16 @@ Details:
 - `correlation_data.csv`: ln(k_obs) and every descriptor, one row per compound and level
 - `correlation_predictions.csv`: predicted vs observed ln(k) for compounds outside the fit set
 - `correlation_pairs.csv`: two-descriptor models (`CORR_PAIRS`: ΔG_ET + ΔG_frag and ΔG_ET + ΔG(ArX•⁻ + e⁻ → Ar⁻ + X⁻))
-- `plots/correlations_<level>.png`: the six best single-descriptor fits for each level
-  (needs matplotlib)
+- `plots/`: correlation figures in Jonas's style (`haloaro/plotting.py`, `haloaro/jonas.mplstyle`;
+  Cambria, boxed axes, outward ticks, no gridlines, one y range for every panel):
+  - `correlations_<level>.png/.pdf`: the six best models of `qsar_summary` fitted on the
+    bromobenzenes, 3 × 2 panels, 7 in wide
+  - `qsar_<level>_<rank>_<descriptor>.png/.pdf`: the best `PLOT_TOP_SINGLE` models,
+    3.5 × 3.0 in, with compound labels (the `label` column of the kobs file) and a legend
+  - `captions.md`: a caption for each figure. The electrode, cell, electrolyte and pH are
+    left as a placeholder to fill in.
+  Filled gray circles: published bromobenzene data (fitted, dotted line); open circles: new
+  chlorobenzene data; gray squares: published PBDE data. PNG at 600 dpi and vector PDF.
 
 Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et al.,
 *Environ. Sci. Technol.* 2026, 60, 1346, Table 1. Two corrections were applied:

@@ -65,6 +65,11 @@ CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal"),
 # kinetics. Site quantities use the most favourable site; *_any uses the lowest radical-anion
 # energy whatever its state. Barriers "@ V" are evaluated at EXP_POTENTIAL_V.
 _AT = f"@ {EXP_POTENTIAL_V:+.2f} V"      # suffix of potential-dependent descriptor names
+# Figures (compile, needs matplotlib): labelled single figures for the best PLOT_TOP_SINGLE
+# models per level; Cambria is also looked for in these folders (e.g., the copy bundled with Word)
+PLOT_TOP_SINGLE = 3
+PLOT_FONT_DIRS = ["~/Library/Fonts", "/Applications/Microsoft Word.app/Contents/Resources/DFonts"]
+
 QSAR_DESCRIPTORS = [
     ("LUMO_eV",                  "LUMO of ArX",                        "thermo"),
     ("LUMO_RA_eV",               "LUMO of the radical anion ArX.-",              "thermo"),

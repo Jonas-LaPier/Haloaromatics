@@ -32,7 +32,7 @@ os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 
 import config as C  # noqa: E402
-from haloaro import correlations, descriptors, qc, thermo  # noqa: E402
+from haloaro import correlations, descriptors, plotting, qc, thermo  # noqa: E402
 from haloaro.geomtools import sphere_radius  # noqa: E402
 from haloaro.parse import parse_log  # noqa: E402
 from haloaro.stages import (REACTIONS, SPECIES, STAGES, Skip, build_input, jobs, resources,  # noqa: E402
@@ -324,8 +324,9 @@ def cmd_compile(a):
         write_csv(RESULTS / "correlation_pairs.csv", cpairs)
         write_csv(RESULTS / "correlation_predictions.csv", cpred)
         write_csv(RESULTS / "qsar_summary.csv", qsar)
-        figs = correlations.plots(corr, cdata, RESULTS / "plots")
-        print(f"wrote results/correlations*.csv ({len(corr)} fits)" + (f" and {len(figs)} plots in results/plots/" if figs else ""))
+        figs = plotting.correlation_figures(qsar, cdata, RESULTS / "plots")
+        print(f"wrote results/correlations*.csv ({len(corr)} fits)" + (f" and {len(figs)} figure files in results/plots/" if figs
+              else " (no figures: matplotlib not installed)"))
     if C.RUN_RA_TS:
         write_csv(RESULTS / "ts_barriers.csv", ts)
         write_csv(RESULTS / "pathway_comparison.csv", path)
