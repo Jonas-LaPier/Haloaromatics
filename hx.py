@@ -4,6 +4,7 @@
     python3 hx.py species                     # list species / reactions  -> results/
     python3 hx.py generate am1                # write .gjf inputs
     python3 hx.py submit am1 [--dry-run]      # job array of every input without a log
+    python3 hx.py submit am1 --serial --time 0-00:30:00   # or all of them in one job
     python3 hx.py status am1                  # QC summary
     python3 hx.py retry am1                   # rebuild failed jobs with fixes, then submit again
     python3 hx.py scrape all                  # logs -> results/raw/<stage>.csv
@@ -119,6 +120,8 @@ def cmd_generate(a):
 
 
 def cmd_submit(a):
+    if a.serial and not a.time:
+        raise SystemExit("--serial needs an explicit --time for the whole batch (e.g. --time 0-00:30:00)")
     Path("slurm_logs").mkdir(exist_ok=True)
     for sn in resolve(a.stages):
         st = STAGES[sn]
@@ -151,18 +154,27 @@ def cmd_submit(a):
             man = st.dir / f"manifest_{stamp}{suffix}.txt"
             if not a.dry_run:
                 man.write_text("\n".join(ips) + "\n")
-            cmd = ["sbatch", f"--job-name={sn}", f"--array=1-{len(ips)}%{C.ARRAY_THROTTLE}",
-                   f"--cpus-per-task={cpus}", f"--mem={mem}G", f"--time={time}"]
+            cmd = ["sbatch", "--parsable", f"--job-name={sn}"]
+            if a.serial:
+                # one job running every input in turn (Sherlock: aggregate short tasks)
+                cmd += ["--output=slurm_logs/%x.%j.out", "--error=slurm_logs/%x.%j.err"]
+            else:
+                cmd.append(f"--array=1-{len(ips)}%{C.ARRAY_THROTTLE}")
+            cmd += [f"--cpus-per-task={cpus}", f"--mem={mem}G", f"--time={a.time or time}"]
             if C.PARTITION:
                 cmd.append(f"--partition={C.PARTITION}")
             cmd += ["slurm/g16_array.sbatch", str(man)]
-            print(f"[{sn}] {len(ips)} jobs -> {man}")
+            print(f"[{sn}] {len(ips)} jobs -> {man}" + (" (serial)" if a.serial else ""))
             print("   " + " ".join(cmd))
             if not a.dry_run:
                 if shutil.which("sbatch") is None:
                     print("   sbatch not found (not on Sherlock?) - run the command above manually")
                 else:
-                    subprocess.run(cmd, check=False)
+                    r = subprocess.run(cmd, check=False, capture_output=True, text=True)
+                    if r.returncode == 0:
+                        print(f"   submitted job {r.stdout.strip().split(';')[0]}")
+                    else:
+                        print(f"   sbatch failed: {r.stderr.strip()}")
 
 
 def cmd_status(a):
@@ -385,12 +397,15 @@ def main():
         for fl, h in flags.items():
             p.add_argument(f"--{fl.replace('_', '-')}", action="store_true", help=h)
         p.set_defaults(f=f)
+        return p
 
     stage_cmd("generate", cmd_generate, force="overwrite existing inputs",
               ignore_prereq="do not require the AM1 log to pass QC (opt/freq stages only)",
               verbose="list every skipped job")
-    stage_cmd("submit", cmd_submit, dry_run="print sbatch command only",
-              include_incomplete="resubmit logs without a termination line (make sure they are not running!)")
+    sp_submit = stage_cmd("submit", cmd_submit, dry_run="print sbatch command only",
+                          include_incomplete="resubmit logs without a termination line (make sure they are not running!)",
+                          serial="run all inputs one after another in a single job (for short jobs such as AM1)")
+    sp_submit.add_argument("--time", help="override the Slurm time limit, e.g. 0-00:30:00 (needed with --serial)")
     stage_cmd("status", cmd_status, verbose="also list missing jobs")
     stage_cmd("retry", cmd_retry, force="rerun failures without an automatic fix",
               include_incomplete="also retry jobs that were killed (e.g. time limit)")

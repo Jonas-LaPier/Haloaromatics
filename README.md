@@ -32,7 +32,7 @@ meaning how many equivalent C–X bonds it covers.
 - **Starting geometry:** a twisted C₂-like conformation (C–O–C 120°, both rings rotated
   50°). No conformer search is done; a CREST/xTB search is recommended before
   interpreting small energy differences.
-- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB, 2 days for opt/freq),
+- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB, 12 h for opt/freq, scan and TS),
   and `submit` sends them as a separate array.
 
 **Names.** `ClBz_124` is 1,2,4-trichlorobenzene and `ClBz_124_RA` is its radical anion.
@@ -116,8 +116,10 @@ Set `RUN_RA_TS = False` in `config.py` to skip the TS stages and report only the
 
 ```bash
 cd ~/Haloaromatics            # project root; all paths are relative to here
+module load python/3.12.1     # the system python3 (3.6) is too old for this code
 python3 hx.py generate am1
-python3 hx.py submit am1      # one job array; add --dry-run to only print the sbatch line
+python3 hx.py submit am1 --serial --time 0-00:30:00   # AM1 jobs take seconds: run them in one job
+python3 hx.py submit m062x_gas  # one job array; add --dry-run to only print the sbatch line
 python3 hx.py status am1      # QC summary: ok / warn / fail / incomplete / missing
 python3 hx.py retry am1       # rebuild failed inputs with automatic fixes, then submit again
 
@@ -141,7 +143,11 @@ Details:
 
 - `submit` writes `calcs/<stage>/manifest_<time>.txt`, which lists every input that has
   no log yet, and submits `slurm/g16_array.sbatch` as one array (throttle `%50`). This
-  means resubmitting never reruns finished jobs.
+  means resubmitting never reruns finished jobs. It prints the Slurm job ID.
+- `submit --serial --time <limit>` runs the whole manifest one input after another in a
+  single job instead of an array. Use it for short jobs such as AM1 (seconds each):
+  Sherlock asks that the work inside a job last at least 10 minutes. The time limit must
+  be given explicitly and covers the whole batch.
 - Gaussian scratch goes to `$L_SCRATCH` (node-local). Set `FORMCHK=1` before `sbatch`
   to also write `.fchk` files.
 - `retry` moves the failed log and input to `calcs/<stage>/logs/failed/<name>.tryN.*`
