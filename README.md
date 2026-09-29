@@ -115,7 +115,7 @@ Set `RUN_RA_TS = False` in `config.py` to skip the TS stages and report only the
 ## Workflow on Sherlock
 
 ```bash
-cd ~/Haloaromatics            # project root; all paths are relative to here
+cd $GROUP_HOME/Haloaromatics  # project root; all paths are relative to here
 module load python/3.12.1     # the system python3 (3.6) is too old for this code
 python3 hx.py generate am1
 python3 hx.py submit am1 --serial --time 0-00:30:00   # AM1 jobs take seconds: run them in one job
@@ -138,6 +138,12 @@ python3 hx.py compile         # -> results/*.csv and results/Haloaromatics_resul
 **Tip:** before submitting all 129 jobs of a new level, test one bromine species first:
 `python3 hx.py submit m062x_gas --only BrBz_1`. This confirms that 6-311++G(d) is
 defined for Br in your Gaussian build.
+
+Run jobs from `$GROUP_HOME/Haloaromatics` (1 TB), not `$HOME` (15 GB). The checkpoint
+files (about 70 MB each for the PBDEs, over 1,000 in total) filled the `$HOME` quota and
+killed every running job. `~/Haloaromatics` is kept as a copy of the logs and results
+only, without checkpoints, so it cannot run jobs that read a `.chk` (`Geom=Check`,
+retries).
 
 Details:
 
