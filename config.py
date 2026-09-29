@@ -52,7 +52,50 @@ DET_POTENTIALS_V = [-1.0, -1.5, -2.0]        # electrode/donor potentials (V vs 
 EXPERIMENTAL_KOBS = "data/experimental_kobs.csv"
 EXP_POTENTIAL_V = -2.0          # potential at which the kobs were measured (V vs SHE; uncompensated, no iR-drop compensation)
 CORR_FIT_GROUP = "bromobenzene" # fit on this group, then predict the others (e.g. PBDEs)
-CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal")]   # two-descriptor MLR models
+# Compound sets fitted separately (group names from EXPERIMENTAL_KOBS; "halobenzene" means
+# bromobenzene + chlorobenzene, "all" means every compound with data)
+CORR_FIT_SETS = ["bromobenzene", "chlorobenzene", "halobenzene", "all"]
+# Two-descriptor MLR models: LaPier et al. 2026 Table 2, eqs 4 x 5 and eqs 4 x 6
+CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal"),
+              ("dG_ET_any_kcal", "min_dG_RA_2e_any_kcal")]
+
+# QSAR summary (results/qsar_summary.csv, sheet QSAR_summary): (descriptor, label, set).
+# Set "LaPier2026" reproduces Table 2 of LaPier et al., ES&T 2026, 60, 1346 (M06-2X/6-311++G(d),
+# gas phase, fitted on the 7 bromobenzenes; site quantities at the most favourable site; *_any
+# uses the lowest radical-anion energy whatever its state). Set "extended" adds the other
+# parameters expected to matter for reduction kinetics. Barriers "@ V" use EXP_POTENTIAL_V.
+QSAR_PAPER_LEVEL = "m062x_gas"
+_AT = f"@ {EXP_POTENTIAL_V:+.2f} V"      # suffix of potential-dependent descriptor names
+QSAR_DESCRIPTORS = [
+    ("LUMO_eV",                  "Gas-phase LUMO of ArX",                        "LaPier2026"),
+    ("LUMO_RA_eV",               "LUMO of the radical anion ArX.-",              "LaPier2026"),
+    ("min_dG_1e_kcal",           "dG eq 2: ArX + e- -> Ar. + X-",                "LaPier2026"),
+    ("min_dG_2e_carbanion_kcal", "dG eq 3: ArX + 2e- -> Ar- + X-",               "LaPier2026"),
+    ("dG_ET_any_kcal",           "dG eq 4: ArX + e- -> ArX.-",                   "LaPier2026"),
+    ("min_dG_frag_any_kcal",     "dG eq 5: ArX.- -> Ar. + X-",                   "LaPier2026"),
+    ("min_dG_RA_2e_any_kcal",    "dG eq 6: ArX.- + e- -> Ar- + X-",              "LaPier2026"),
+    ("n_X",                      "number of halogens",                           "extended"),
+    ("VEA_eV",                   "vertical electron affinity",                   "extended"),
+    ("AEA_elec_eV",              "adiabatic electron affinity (electronic)",     "extended"),
+    ("omega_dSCF_eV",            "electrophilicity index (dSCF)",                "extended"),
+    ("E_ET_V",                   "E deg ArX/ArX.- (SMD levels only)",            "extended"),
+    ("dG_ET_kcal",               "dG eq 4, bound radical anions only",           "extended"),
+    ("min_dG_frag_kcal",         "dG eq 5, bound radical anions only",           "extended"),
+    ("min_dG_RA_2e_kcal",        "dG eq 6, bound radical anions only",           "extended"),
+    ("min_dG_2e_HDH_kcal",       "dG ArX + H+ + 2e- -> ArH + X-",                "extended"),
+    ("min_dG_rad_red_kcal",      "dG Ar. + e- -> Ar-",                           "extended"),
+    ("lambda_i_kcal",            "inner-sphere reorganisation energy",           "extended"),
+    ("min_BDE_kcal",             "weakest C-X bond enthalpy",                    "extended"),
+    ("min_dG0_act_concerted_kcal", "Saveant intrinsic barrier (weakest C-X)",    "extended"),
+    (f"eff_dG_act_concerted_kcal {_AT}", "Saveant concerted barrier",         "extended"),
+    (f"eff_dG_act_stepwise_kcal {_AT}",  "stepwise ET + cleavage barrier",    "extended"),
+    (f"eff_dG_act_combined_kcal {_AT}",  "combined stepwise + concerted",     "extended"),
+    ("eff_dG_act_frag_TS_kcal",  "C-X cleavage TS barrier of ArX.-",             "extended"),
+    ("max_fplus_CX",             "largest Fukui f+ on a C-X bond",               "extended"),
+    ("min_wiberg_CX_parent",     "weakest Wiberg C-X bond order",                "extended"),
+    ("max_spin_RA_X",            "largest halogen spin density in ArX.-",        "extended"),
+    ("max_dr_CX_RA_A",           "largest C-X elongation in ArX.-",              "extended"),
+]
 
 # Stepwise radical-anion TS workflow (tsscan_* / ts_* stages): ArX.- -> [Ar...X]‡.- -> Ar. + X-.
 # Run alongside the Saveant concerted analysis; compile compares the two pathways.

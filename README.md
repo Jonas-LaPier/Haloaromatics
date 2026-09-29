@@ -204,6 +204,7 @@ Details:
   - `rad_red` Ar• + e⁻ → Ar⁻
   - `2e_carbanion` ArX + 2e⁻ → Ar⁻ + X⁻
   - `2e_HDH` ArX + H⁺ + 2e⁻ → ArH + X⁻ (hydrodehalogenation)
+  - `RA_2e` ArX•⁻ + e⁻ → Ar⁻ + X⁻ (second electron to the radical anion; eq 6 of LaPier et al. 2026)
 
   Each gives ΔG in kcal/mol and E° in V vs SHE (SMD levels only).
 - `ts_barriers.csv`: stepwise ΔG‡ and ΔE‡ = TS − ArX•⁻, ΔG‡ relative to ArX + e⁻, imaginary frequency, QC flags
@@ -213,6 +214,7 @@ Details:
   - HOMO, LUMO and gap
   - Koopmans and ΔSCF values of μ, η and ω (electrophilicity)
   - vertical and adiabatic EA, vertical IE
+  - LUMO of the relaxed radical anion (`LUMO_RA_eV`, any state)
   - λ_N, λ_A and λᵢ
   - dipole moment, isotropic polarizability and van der Waals radius
   - ΔG_ET and E°_ET
@@ -230,17 +232,27 @@ Details:
   degeneracy × exp(−ΔG‡/RT) using the stepwise TS, the concerted barrier, and the combined
   stepwise + concerted rate at each potential
 - `qc_issues.csv`: every job whose status is not `ok`
+- `qsar_summary.csv` (first sheet of the workbook): the QSAR models to check, for every
+  level and fit set. It lists `QSAR_DESCRIPTORS` from `config.py` in order: first the models
+  of Table 2 of LaPier et al. 2026 (set `LaPier2026`: parent and radical-anion LUMO, ΔG of
+  eqs 2–6, and the MLR models eqs 4 + 5 and eqs 4 + 6), then the other candidate parameters
+  (set `extended`: EA, electrophilicity, E°, λᵢ, BDE, Savéant and stepwise barriers, Fukui f⁺,
+  Wiberg bond orders, spin densities). The paper's level is `m062x_gas` (`paper_level`). At
+  that level, the bromobenzene fit reproduces the paper's eq 3 model (r² = 0.92). The
+  paper's "MSE" column corresponds to SSE here. The radical-anion models (eqs 4–6) differ
+  from the paper because the radical anions here were reoptimized without symmetry.
 - `correlations.csv`: ln(k_obs) against every compound-level descriptor at every level.
-  Each fit reports n, slope, intercept, r, R², p, RMSE, leave-one-out RMSE and Q². Two
-  fits are made per descriptor: one on the bromobenzenes (`CORR_FIT_GROUP`), which is then
-  used to predict the PBDEs, and one on all compounds. Site quantities are reduced to the
+  Each fit reports n, slope, intercept, r, R², p, SSE, MSE (= SSE/n), RMSE, leave-one-out
+  RMSE and Q². Each descriptor is fitted on every set in `CORR_FIT_SETS`: the bromobenzenes
+  (`CORR_FIT_GROUP`, whose fit is then used to predict all other compounds), the
+  chlorobenzenes, the halobenzenes (bromo- and chlorobenzenes) and all compounds. Site quantities are reduced to the
   most favorable site (`min_*`/`max_*`) or to a degeneracy-weighted effective barrier
   (`eff_*` = −RT ln Σ gᵢ exp(−ΔG‡ᵢ/RT)). Potential-dependent barriers are evaluated at
   `EXP_POTENTIAL_V` (−2.0 V vs SHE; uncompensated potential, without iR-drop compensation). For barriers, `slope_x_RT` = 1 would be ideal
   transition-state-theory behavior.
 - `correlation_data.csv`: ln(k_obs) and every descriptor, one row per compound and level
 - `correlation_predictions.csv`: predicted vs observed ln(k) for compounds outside the fit set
-- `correlation_pairs.csv`: two-descriptor models (`CORR_PAIRS`, default ΔG_ET + ΔG_frag)
+- `correlation_pairs.csv`: two-descriptor models (`CORR_PAIRS`, default eqs 4 + 5 and eqs 4 + 6)
 - `plots/correlations_<level>.png`: the six best single-descriptor fits for each level
   (needs matplotlib)
 

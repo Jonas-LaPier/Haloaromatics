@@ -300,7 +300,7 @@ def cmd_compile(a):
     path = thermo.pathway_table(rx, ts, det, lam_i) if C.RUN_RA_TS else []
     sites = descriptors.site_table(tab, atoms, SPECIES, REACTIONS, rx, ts, det)
     prod = descriptors.product_distribution(sites, det, path)
-    corr, cdata, cpairs, cpred = correlations.run(mol, rx, det, path, ts, sites)
+    corr, cdata, cpairs, cpred, qsar = correlations.run(mol, rx, det, path, ts, sites)
     lumo = [{"level": r["level"], "name": r["name"], "halogen": r["halogen"], "n_X": r["n_X"],
              "LUMO_Eh": r["lumo"], "LUMO_eV": r["lumo_eV"], "HOMO_Eh": r["homo"], "status": r["status"]}
             for r in species_rows if r["kind"] == "parent" and r["level"] in C.LEVELS]
@@ -323,6 +323,7 @@ def cmd_compile(a):
         write_csv(RESULTS / "correlation_data.csv", cdata)
         write_csv(RESULTS / "correlation_pairs.csv", cpairs)
         write_csv(RESULTS / "correlation_predictions.csv", cpred)
+        write_csv(RESULTS / "qsar_summary.csv", qsar)
         figs = correlations.plots(corr, cdata, RESULTS / "plots")
         print(f"wrote results/correlations*.csv ({len(corr)} fits)" + (f" and {len(figs)} plots in results/plots/" if figs else ""))
     if C.RUN_RA_TS:
@@ -344,7 +345,7 @@ def cmd_compile(a):
     wb.remove(wb.active)
     sheets = [("README", [{"note": thermo.__doc__ + (thermo.pathway_table.__doc__ if C.RUN_RA_TS else "")
                                      + descriptors.__doc__ + correlations.__doc__}]),
-              ("Molecular_descriptors", mol), ("Site_descriptors", sites),
+              ("QSAR_summary", qsar), ("Molecular_descriptors", mol), ("Site_descriptors", sites),
               ("Product_distribution", prod), ("Correlations", corr), ("Correlation_data", cdata),
               ("Correlation_pairs", cpairs), ("Correlation_predictions", cpred),
               ("Reactions", rx), ("DET_barriers", det)]

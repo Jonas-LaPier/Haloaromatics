@@ -123,6 +123,8 @@ def molecular_table(tab, species, rx_rows):
             lam_i[(level, name)] = li if ra_row.get("RA_state") == "pi" else None
             d["RA_bound"] = None if not ra_row else ra_ok
             d["RA_S2"] = _f(ra_row.get("S2"))
+            # LUMO of the relaxed radical anion, whatever its state (as in the published QSAR)
+            d["LUMO_RA_eV"] = _f(ra_row.get("lumo_eV")) if _usable(ra_row) else None
 
             sites = rx_by.get((level, name), [])
             if sites:
