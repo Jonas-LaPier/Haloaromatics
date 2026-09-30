@@ -65,6 +65,15 @@ CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal"),
 # kinetics. Site quantities use the most favourable site; *_any uses the lowest radical-anion
 # energy whatever its state. Barriers "@ V" are evaluated at EXP_POTENTIAL_V.
 _AT = f"@ {EXP_POTENTIAL_V:+.2f} V"      # suffix of potential-dependent descriptor names
+# Multiple-linear-regression exploration (haloaro/mlr.py, figures/qsar_mlr_explore.py): every
+# combination of up to MLR_MAX_TERMS descriptors, scored on MLR_SPLITS repeated train/test splits
+# that hold out MLR_TEST_PER_GROUP compounds of each group (fixed seed for reproducibility).
+MLR_MAX_TERMS = 3
+MLR_SPLITS = 200
+MLR_TEST_PER_GROUP = {"bromobenzene": 2, "chlorobenzene": 1, "pbde": 1}   # 4 test, 10 training
+MLR_SEED = 20260930
+MLR_MAX_R = 0.90          # models whose descriptors correlate more strongly are flagged collinear
+
 # Figures (compile, needs matplotlib): labelled single figures for the best PLOT_TOP_SINGLE
 # models per level; Cambria is also looked for in these folders (e.g., the copy bundled with Word)
 PLOT_TOP_SINGLE = 3
