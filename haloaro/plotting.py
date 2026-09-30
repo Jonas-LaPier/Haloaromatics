@@ -228,11 +228,13 @@ def _overlap(a, b):
     return not (a.x1 < b.x0 or b.x1 < a.x0 or a.y1 < b.y0 or b.y1 < a.y0)
 
 
-def _place_labels(fig, ax, pts, line, avoid=(), fontsize=9, ms=7, fixed=None):
+def _place_labels(fig, ax, pts, line, avoid=(), fontsize=9, ms=7, fixed=None, directions=None):
     """Greedy label placement, run after the layout is final: try positions around each
     point and keep the first that clears every marker, label, the fit line, the legend and
     the frame. Positions far from the point get a gray leader line. `fixed` maps a label to
-    an (dx, dy) offset in points, placed first, for hand-tuned crowded spots."""
+    an (dx, dy) offset in points, placed first, for hand-tuned crowded spots. `directions`
+    restricts the search to these (dx, dy) offsets (e.g. Excel's right/left/above/below).
+    Returns {label: (dx, dy)} of the positions used."""
     from matplotlib.transforms import Bbox
     fig.canvas.draw()
     r = fig.canvas.get_renderer()
@@ -244,10 +246,13 @@ def _place_labels(fig, ax, pts, line, avoid=(), fontsize=9, ms=7, fixed=None):
     lpts = _line_pts(ax, line)
     # candidate offsets (points): rings of increasing distance, 12 directions each
     cands = [(0.0, 6.0, 0.0), (0.0, -6.0, 0.0)]
-    for d in (7, 12, 18, 26, 36):
+    for d in (() if directions else (7, 12, 18, 26, 36)):
         for ang in (0, 180, 90, 270, 30, 150, 210, 330, 60, 120, 240, 300):
             dx, dy = d * math.cos(math.radians(ang)), 0.8 * d * math.sin(math.radians(ang))
             cands.append((d, round(dx, 1), round(dy, 1)))
+    if directions:
+        cands = [(math.hypot(dx, dy), dx, dy) for dx, dy in directions]
+    placed = {}
     # crowded points first, so they get the positions closest to them
     crowd = [sum(abs(a.x0 - b.x0) < 40 and abs(a.y0 - b.y0) < 20 for b in marks) for a in marks]
     fixed = fixed or {}
@@ -282,6 +287,8 @@ def _place_labels(fig, ax, pts, line, avoid=(), fontsize=9, ms=7, fixed=None):
                     arrowprops=dict(arrowstyle="-", color=GRAY, lw=0.75, shrinkA=0,
                                     shrinkB=half * 72 / fig.dpi + 1) if d > 12 else None)
         busy.append(bb)
+        placed[p["label"]] = (dx, dy)
+    return placed
 
 
 def _panel(ax, fit, pts, desc, label, yticks, ms, fontsize=None):
