@@ -52,7 +52,54 @@ DET_POTENTIALS_V = [-1.0, -1.5, -2.0]        # electrode/donor potentials (V vs 
 EXPERIMENTAL_KOBS = "data/experimental_kobs.csv"
 EXP_POTENTIAL_V = -2.0          # potential at which the kobs were measured (V vs SHE; uncompensated, no iR-drop compensation)
 CORR_FIT_GROUP = "bromobenzene" # fit on this group, then predict the others (e.g. PBDEs)
-CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal")]   # two-descriptor MLR models
+# Compound sets fitted separately (group names from EXPERIMENTAL_KOBS; "halobenzene" means
+# bromobenzene + chlorobenzene, "all" means every compound with data)
+CORR_FIT_SETS = ["bromobenzene", "chlorobenzene", "halobenzene", "all"]
+# Two-descriptor MLR models: electron transfer to ArX combined with the radical-anion step
+CORR_PAIRS = [("dG_ET_any_kcal", "min_dG_frag_any_kcal"),
+              ("dG_ET_any_kcal", "min_dG_RA_2e_any_kcal")]
+
+# QSAR summary (results/qsar_summary.csv, sheet QSAR_summary): (descriptor, label, set), fitted
+# against ln(kobs) at every level and fit set. Set "thermo" holds the reduction thermochemistry
+# and frontier orbitals; set "extended" the other parameters expected to matter for reduction
+# kinetics. Site quantities use the most favourable site; *_any uses the lowest radical-anion
+# energy whatever its state. Barriers "@ V" are evaluated at EXP_POTENTIAL_V.
+_AT = f"@ {EXP_POTENTIAL_V:+.2f} V"      # suffix of potential-dependent descriptor names
+# Figures (compile, needs matplotlib): labelled single figures for the best PLOT_TOP_SINGLE
+# models per level; Cambria is also looked for in these folders (e.g., the copy bundled with Word)
+PLOT_TOP_SINGLE = 3
+PLOT_FONT_DIRS = ["~/Library/Fonts", "/Applications/Microsoft Word.app/Contents/Resources/DFonts"]
+
+QSAR_DESCRIPTORS = [
+    ("LUMO_eV",                  "LUMO of ArX",                        "thermo"),
+    ("LUMO_RA_eV",               "LUMO of the radical anion ArX.-",              "thermo"),
+    ("min_dG_1e_kcal",           "dG ArX + e- -> Ar. + X-",                "thermo"),
+    ("min_dG_2e_carbanion_kcal", "dG ArX + 2e- -> Ar- + X-",               "thermo"),
+    ("dG_ET_any_kcal",           "dG ArX + e- -> ArX.-",                   "thermo"),
+    ("min_dG_frag_any_kcal",     "dG ArX.- -> Ar. + X-",                   "thermo"),
+    ("min_dG_RA_2e_any_kcal",    "dG ArX.- + e- -> Ar- + X-",              "thermo"),
+    ("n_X",                      "number of halogens",                           "extended"),
+    ("VEA_eV",                   "vertical electron affinity",                   "extended"),
+    ("AEA_elec_eV",              "adiabatic electron affinity (electronic)",     "extended"),
+    ("omega_dSCF_eV",            "electrophilicity index (dSCF)",                "extended"),
+    ("E_ET_V",                   "E deg ArX/ArX.- (SMD levels only)",            "extended"),
+    ("dG_ET_kcal",               "dG ArX + e- -> ArX.-, bound RA only",           "extended"),
+    ("min_dG_frag_kcal",         "dG ArX.- -> Ar. + X-, bound RA only",           "extended"),
+    ("min_dG_RA_2e_kcal",        "dG ArX.- + e- -> Ar- + X-, bound RA only",           "extended"),
+    ("min_dG_2e_HDH_kcal",       "dG ArX + H+ + 2e- -> ArH + X-",                "extended"),
+    ("min_dG_rad_red_kcal",      "dG Ar. + e- -> Ar-",                           "extended"),
+    ("lambda_i_kcal",            "inner-sphere reorganisation energy",           "extended"),
+    ("min_BDE_kcal",             "weakest C-X bond enthalpy",                    "extended"),
+    ("min_dG0_act_concerted_kcal", "Saveant intrinsic barrier (weakest C-X)",    "extended"),
+    (f"eff_dG_act_concerted_kcal {_AT}", "Saveant concerted barrier",         "extended"),
+    (f"eff_dG_act_stepwise_kcal {_AT}",  "stepwise ET + cleavage barrier",    "extended"),
+    (f"eff_dG_act_combined_kcal {_AT}",  "combined stepwise + concerted",     "extended"),
+    ("eff_dG_act_frag_TS_kcal",  "C-X cleavage TS barrier of ArX.-",             "extended"),
+    ("max_fplus_CX",             "largest Fukui f+ on a C-X bond",               "extended"),
+    ("min_wiberg_CX_parent",     "weakest Wiberg C-X bond order",                "extended"),
+    ("max_spin_RA_X",            "largest halogen spin density in ArX.-",        "extended"),
+    ("max_dr_CX_RA_A",           "largest C-X elongation in ArX.-",              "extended"),
+]
 
 # Stepwise radical-anion TS workflow (tsscan_* / ts_* stages): ArX.- -> [Ar...X]‡.- -> Ar. + X-.
 # Run alongside the Saveant concerted analysis; compile compares the two pathways.
@@ -97,7 +144,7 @@ RESOURCES = {
 RESOURCES_DPE = {
     "am1":     {"cpus": 1, "mem_gb": 2,  "time": "0-01:00:00"},
     "optfreq": {"cpus": 16, "mem_gb": 48, "time": "0-12:00:00"},
-    "tsscan":  {"cpus": 16, "mem_gb": 48, "time": "0-12:00:00"},
+    "tsscan":  {"cpus": 16, "mem_gb": 48, "time": "2-00:00:00"},   # 16-point scans: ~11-22 h
     "ts":      {"cpus": 16, "mem_gb": 48, "time": "0-12:00:00"},
     "sp":      {"cpus": 16, "mem_gb": 32, "time": "0-08:00:00"},
 }

@@ -13,6 +13,7 @@ Reactions (one row per symmetry-unique C-X bond, degeneracy listed):
     frag    ArX.-            -> Ar.  + X-
     rad     Ar. + e-         -> Ar-
     2e_an   ArX + 2e-        -> Ar-  + X-        (to carbanion)
+    RA_2e   ArX.- + e-       -> Ar-  + X-        (second electron to the radical anion)
     2e_HDH  ArX + H+ + 2e-   -> ArH  + X-        (hydrodehalogenation)
     TS      dG‡ = G(TS) - G(ArX.-);  dG‡(from ArX + e-) = G(TS) - G(ArX) - G(e-)
             (only if config.RUN_RA_TS)
@@ -180,6 +181,7 @@ def reaction_table(tab, reactions, species):
             e["frag"] = _dg([g["Ar_rad"], g["X"]], [g["RA"]])
             e["rad"] = _dg([g["Ar_an"]], [g["Ar_rad"], ge])
             e["2e_an"] = _dg([g["Ar_an"], g["X"]], [g["ArX"], 2 * ge])
+            e["RA_2e"] = _dg([g["Ar_an"], g["X"]], [g["RA"], ge])
             e["2e_HDH"] = _dg([g["ArH"], g["X"]], [g["ArX"], gH, 2 * ge])
             n = {"ET": 1, "1e": 1, "rad": 1, "2e_an": 2, "2e_HDH": 2}
             missing = [species_name for key, species_name in dict(
@@ -200,6 +202,8 @@ def reaction_table(tab, reactions, species):
                 "RA_state": tab.get((level, rx.radical_anion), {}).get("RA_state"),
                 "dG_rad_red_kcal": _r(e["rad"]), "E_rad_red_V": _r(_E(e["rad"], 1, level), 3),
                 "dG_2e_carbanion_kcal": _r(e["2e_an"]), "E_2e_carbanion_V": _r(_E(e["2e_an"], 2, level), 3),
+                "dG_RA_2e_kcal": _r(e["RA_2e"]),
+                "dG_RA_2e_any_kcal": _r(_dg([g["Ar_an"], g["X"]], [g_ra_any, ge])),
                 "dG_2e_HDH_kcal": _r(e["2e_HDH"]), "E_2e_HDH_V": _r(_E(e["2e_HDH"], 2, level), 3),
                 "RA_flags": ra_flags,
                 "missing_species": ";".join(missing),

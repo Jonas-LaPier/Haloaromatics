@@ -32,7 +32,7 @@ meaning how many equivalent C–X bonds it covers.
 - **Starting geometry:** a twisted C₂-like conformation (C–O–C 120°, both rings rotated
   50°). No conformer search is done; a CREST/xTB search is recommended before
   interpreting small energy differences.
-- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB, 12 h for opt/freq, scan and TS),
+- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB; 12 h for opt/freq and TS, 2 days for the 16-point C–X scans),
   and `submit` sends them as a separate array.
 
 **Names.** `ClBz_124` is 1,2,4-trichlorobenzene and `ClBz_124_RA` is its radical anion.
@@ -131,8 +131,15 @@ python3 hx.py generate tsscan && python3 hx.py submit tsscan   # needs the m062x
 python3 hx.py generate ts     && python3 hx.py submit ts       # from the scan maxima
 python3 hx.py generate sp     && python3 hx.py submit sp       # single points (any time after optfreq)
 
-python3 hx.py scrape all      # logs -> results/raw/<stage>.csv
-python3 hx.py compile         # -> results/*.csv and results/Haloaromatics_results.xlsx
+python3 hx.py scrape all      # logs -> results/raw/<stage>.csv; commit results/raw and push
+```
+
+`compile` runs on the Mac, because Sherlock has neither `openpyxl` nor `matplotlib` for
+python/3.12: after `git pull`, run
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install openpyxl matplotlib   # once
+.venv/bin/python hx.py compile   # -> results/*.csv, Haloaromatics_results.xlsx, results/plots/
 ```
 
 **Tip:** before submitting all 129 jobs of a new level, test one bromine species first:
@@ -204,6 +211,7 @@ Details:
   - `rad_red` Ar• + e⁻ → Ar⁻
   - `2e_carbanion` ArX + 2e⁻ → Ar⁻ + X⁻
   - `2e_HDH` ArX + H⁺ + 2e⁻ → ArH + X⁻ (hydrodehalogenation)
+  - `RA_2e` ArX•⁻ + e⁻ → Ar⁻ + X⁻ (second electron to the radical anion)
 
   Each gives ΔG in kcal/mol and E° in V vs SHE (SMD levels only).
 - `ts_barriers.csv`: stepwise ΔG‡ and ΔE‡ = TS − ArX•⁻, ΔG‡ relative to ArX + e⁻, imaginary frequency, QC flags
@@ -213,6 +221,7 @@ Details:
   - HOMO, LUMO and gap
   - Koopmans and ΔSCF values of μ, η and ω (electrophilicity)
   - vertical and adiabatic EA, vertical IE
+  - LUMO of the relaxed radical anion (`LUMO_RA_eV`, any state)
   - λ_N, λ_A and λᵢ
   - dipole moment, isotropic polarizability and van der Waals radius
   - ΔG_ET and E°_ET
@@ -230,19 +239,34 @@ Details:
   degeneracy × exp(−ΔG‡/RT) using the stepwise TS, the concerted barrier, and the combined
   stepwise + concerted rate at each potential
 - `qc_issues.csv`: every job whose status is not `ok`
+- `qsar_summary.csv` (first sheet of the workbook): the correlation models to check, for
+  every level and fit set, in the order of `QSAR_DESCRIPTORS` in `config.py`: set `thermo`
+  (parent and radical-anion LUMO, ΔG of ArX + e⁻ → Ar• + X⁻, ArX + 2e⁻ → Ar⁻ + X⁻,
+  ArX + e⁻ → ArX•⁻, ArX•⁻ → Ar• + X⁻ and ArX•⁻ + e⁻ → Ar⁻ + X⁻), set `extended` (EA,
+  electrophilicity, E°, λᵢ, BDE, Savéant and stepwise barriers, Fukui f⁺, Wiberg bond
+  orders, spin densities), and the two-descriptor models in `CORR_PAIRS`.
 - `correlations.csv`: ln(k_obs) against every compound-level descriptor at every level.
-  Each fit reports n, slope, intercept, r, R², p, RMSE, leave-one-out RMSE and Q². Two
-  fits are made per descriptor: one on the bromobenzenes (`CORR_FIT_GROUP`), which is then
-  used to predict the PBDEs, and one on all compounds. Site quantities are reduced to the
+  Each fit reports n, slope, intercept, r, R², p, SSE, MSE (= SSE/n), RMSE, leave-one-out
+  RMSE and Q². Each descriptor is fitted on every set in `CORR_FIT_SETS`: the bromobenzenes
+  (`CORR_FIT_GROUP`, whose fit is then used to predict all other compounds), the
+  chlorobenzenes, the halobenzenes (bromo- and chlorobenzenes) and all compounds. Site quantities are reduced to the
   most favorable site (`min_*`/`max_*`) or to a degeneracy-weighted effective barrier
   (`eff_*` = −RT ln Σ gᵢ exp(−ΔG‡ᵢ/RT)). Potential-dependent barriers are evaluated at
   `EXP_POTENTIAL_V` (−2.0 V vs SHE; uncompensated potential, without iR-drop compensation). For barriers, `slope_x_RT` = 1 would be ideal
   transition-state-theory behavior.
 - `correlation_data.csv`: ln(k_obs) and every descriptor, one row per compound and level
 - `correlation_predictions.csv`: predicted vs observed ln(k) for compounds outside the fit set
-- `correlation_pairs.csv`: two-descriptor models (`CORR_PAIRS`, default ΔG_ET + ΔG_frag)
-- `plots/correlations_<level>.png`: the six best single-descriptor fits for each level
-  (needs matplotlib)
+- `correlation_pairs.csv`: two-descriptor models (`CORR_PAIRS`: ΔG_ET + ΔG_frag and ΔG_ET + ΔG(ArX•⁻ + e⁻ → Ar⁻ + X⁻))
+- `plots/`: correlation figures in Jonas's style (`haloaro/plotting.py`, `haloaro/jonas.mplstyle`;
+  Cambria, boxed axes, outward ticks, no gridlines, one y range for every panel):
+  - `correlations_<level>.png/.pdf`: the six best models of `qsar_summary` fitted on the
+    bromobenzenes, 3 × 2 panels, 7 in wide
+  - `qsar_<level>_<rank>_<descriptor>.png/.pdf`: the best `PLOT_TOP_SINGLE` models,
+    3.5 × 3.0 in, with compound labels (the `label` column of the kobs file) and a legend
+  - `captions.md`: a caption for each figure. The electrode, cell, electrolyte and pH are
+    left as a placeholder to fill in.
+  Filled gray circles: published bromobenzene data (fitted, dotted line); open circles: new
+  chlorobenzene data; gray squares: published PBDE data. PNG at 600 dpi and vector PDF.
 
 Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et al.,
 *Environ. Sci. Technol.* 2026, 60, 1346, Table 1. Two corrections were applied:
@@ -250,6 +274,11 @@ Experimental rate constants are in `data/experimental_kobs.csv`, from LaPier et 
   potential.
 - The published 1,3-dibromobenzene value (0.79 ± 0.074) is per day; it was divided by 24
   to give 0.0329 h⁻¹, consistent with the 21 h half-life.
+
+Five chlorobenzenes (group `chlorobenzene`: hexa-, penta-, 1,2,4,5-tetra-, 1,2- and
+1,4-dichlorobenzene), also measured at −2.0 V vs SHE, were added on 2026-09-29 from
+unpublished data (no standard errors yet). They enter the `all`
+fits and are predicted by the bromobenzene fit, together with the PBDEs.
 
 The `dG_ET_any` and `dG_frag_any` columns use the lowest radical-anion energy whatever
 its structure (π, bent σ or dissociated), as in the published QSAR. The plain `dG_ET` and

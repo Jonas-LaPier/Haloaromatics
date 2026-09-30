@@ -4,10 +4,13 @@ For every level of theory, each numeric descriptor x of the parent compounds is 
 
     ln(kobs / h^-1) = slope * x + intercept
 
-Two fits are reported per descriptor:
+One fit is reported per descriptor and compound set (config.CORR_FIT_SETS):
     fit_set = <CORR_FIT_GROUP> (default: the bromobenzenes) - the training set; the fitted
               line is then used to predict the remaining compounds (e.g., BDE-47, BDE-99)
-    fit_set = all           - every compound with data
+    fit_set = chlorobenzene, halobenzene (bromo- + chlorobenzenes), all (every compound)
+Statistics: r, R2, p, SSE, MSE (= SSE/n), RMSE, leave-one-out RMSE and Q2.
+qsar_summary() collects the models in config.QSAR_DESCRIPTORS and the two-descriptor models
+in config.CORR_PAIRS.
 
 Site-resolved quantities are reduced to one value per compound in two ways:
     min_* / max_*  the most favourable site
@@ -112,8 +115,9 @@ def linfit(xs, ys):
         b = sum((x - mxi) * (y - myi) for x, y in zip(xi, yi)) / sxxi
         loo.append(ys[i] - (b * xs[i] + myi - b * mxi))
     press = sum(e * e for e in loo)
+    sse = sum(e * e for e in res)
     return {"n": n, "slope": slope, "intercept": icpt, "r": r, "R2": r * r,
-            "p": t_pvalue(t, df) if math.isfinite(t) else 0.0, "RMSE": rmse,
+            "p": t_pvalue(t, df) if math.isfinite(t) else 0.0, "SSE": sse, "MSE": sse / n, "RMSE": rmse,
             "LOO_RMSE": math.sqrt(press / n), "Q2": 1 - press / syy}
 
 
@@ -143,7 +147,7 @@ def mlr2(x1, x2, ys):
     R2 = 1 - ss_res / ss_tot if ss_tot else None
     adj = 1 - (1 - R2) * (n - 1) / (n - 3) if R2 is not None and n > 3 else None
     return {"n": n, "b0": b[0], "b1": b[1], "b2": b[2], "R2": R2, "adj_R2": adj,
-            "RMSE": math.sqrt(ss_res / n)}
+            "SSE": ss_res, "MSE": ss_res / n, "RMSE": math.sqrt(ss_res / n)}
 
 
 # --------------------------------------------------------------------------- #
@@ -161,7 +165,7 @@ def _eff(values):
 MOL_COLS = ["n_X", "HOMO_eV", "LUMO_eV", "gap_eV", "mu_Koopmans_eV", "eta_Koopmans_eV",
             "omega_Koopmans_eV", "VEA_eV", "AEA_elec_eV", "VIE_eV", "mu_dSCF_eV", "eta_dSCF_eV",
             "omega_dSCF_eV", "lambda_i_kcal", "dipole_D", "polar_iso_A3", "radius_A",
-            "dG_ET_kcal", "E_ET_V"]
+            "dG_ET_kcal", "E_ET_V", "LUMO_RA_eV"]
 
 
 def descriptor_table(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows):
@@ -188,7 +192,7 @@ def descriptor_table(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows)
         for c in ("dG_ET_any_kcal",):
             put(lv, par, c, _f(rs[0].get(c)))
         for c in ("dG_1e_kcal", "dG_frag_kcal", "dG_frag_any_kcal", "dG_2e_carbanion_kcal",
-                  "dG_2e_HDH_kcal", "dG_rad_red_kcal"):
+                  "dG_2e_HDH_kcal", "dG_rad_red_kcal", "dG_RA_2e_kcal", "dG_RA_2e_any_kcal"):
             vals = [_f(r.get(c)) for r in rs if _f(r.get(c)) is not None]
             put(lv, par, f"min_{c}", min(vals) if vals else None)
             put(lv, par, f"eff_{c}", _eff([(r["degeneracy"], _f(r.get(c))) for r in rs]))
@@ -239,7 +243,7 @@ def run(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows):
     """Returns (correlation rows, data rows, pair rows, predictions)."""
     exp = load_experimental()
     if not exp:
-        return [], [], [], []
+        return [], [], [], [], []
     D = descriptor_table(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows)
     levels = list(C.LEVELS)
     data_rows = []
@@ -247,15 +251,16 @@ def run(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows):
         for e in exp:
             d = D.get((lv, e["species"]), {})
             data_rows.append({"level": lv, "compound": e["compound"], "species": e["species"],
-                              "group": e["group"], "kobs_per_h": e["kobs_per_h"],
+                              "label": e.get("label"), "group": e["group"],
+                              "kobs_per_h": e["kobs_per_h"], "se_per_h": e.get("se_per_h"),
                               "ln_kobs": round(e["ln_k"], 4), **{k: round(v, 5) for k, v in d.items()}})
     descs = sorted({k for d in D.values() for k in d})
     out, preds = [], []
     for lv in levels:
         for desc in descs:
-            for fit_set in (C.CORR_FIT_GROUP, "all"):
+            for fit_set in C.CORR_FIT_SETS:
                 pts = [(D.get((lv, e["species"]), {}).get(desc), e["ln_k"], e) for e in exp
-                       if fit_set == "all" or e["group"] == fit_set]
+                       if in_set(e, fit_set)]
                 pts = [p for p in pts if p[0] is not None]
                 fit = linfit([p[0] for p in pts], [p[1] for p in pts])
                 if not fit:
@@ -264,7 +269,7 @@ def run(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows):
                        **{k: (round(v, 4) if isinstance(v, float) else v) for k, v in fit.items()},
                        "slope_x_RT": round(-fit["slope"] * RT, 3) if "act" in desc else None,
                        "compounds": ";".join(p[2]["species"] for p in pts)}
-                if fit_set != "all":
+                if fit_set == C.CORR_FIT_GROUP:
                     others = [e for e in exp if e["group"] != fit_set]
                     errs = []
                     for e in others:
@@ -279,65 +284,52 @@ def run(mol_rows, rx_rows, det_rows, path_rows, ts_rows, site_rows):
                                       "residual_ln": round(pred - e["ln_k"], 3)})
                     row["pred_RMSE_other_groups"] = round(math.sqrt(sum(x * x for x in errs) / len(errs)), 3) if errs else None
                 out.append(row)
-    out.sort(key=lambda r: (r["level"], r["fit_set"] != C.CORR_FIT_GROUP, -(r["R2"] or 0)))
+    set_order = {s: i for i, s in enumerate(C.CORR_FIT_SETS)}
+    out.sort(key=lambda r: (r["level"], r["fit_set"] != C.CORR_FIT_GROUP,
+                            set_order.get(r["fit_set"], 99), -(r["R2"] or 0)))
 
     pair_rows = []
     for lv in levels:
         for a, b in C.CORR_PAIRS:
-            for fit_set in (C.CORR_FIT_GROUP, "all"):
+            for fit_set in C.CORR_FIT_SETS:
                 pts = [(D.get((lv, e["species"]), {}).get(a), D.get((lv, e["species"]), {}).get(b), e["ln_k"])
-                       for e in exp if fit_set == "all" or e["group"] == fit_set]
+                       for e in exp if in_set(e, fit_set)]
                 pts = [p for p in pts if p[0] is not None and p[1] is not None]
                 fit = mlr2([p[0] for p in pts], [p[1] for p in pts], [p[2] for p in pts])
                 if fit:
                     pair_rows.append({"level": lv, "x1": a, "x2": b, "fit_set": fit_set,
                                       **{k: (round(v, 4) if isinstance(v, float) else v) for k, v in fit.items()}})
-    return out, data_rows, pair_rows, preds
+    return out, data_rows, pair_rows, preds, qsar_summary(out, pair_rows)
 
 
-def plots(corr_rows, data_rows, outdir, top=6):
-    """Scatter plots of the best descriptors per level (needs matplotlib; skipped otherwise)."""
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
-        return []
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-    files = []
+def in_set(e, fit_set):
+    """Is experimental row e part of fit set `fit_set` (see config.CORR_FIT_SETS)?"""
+    if fit_set == "all":
+        return True
+    if fit_set == "halobenzene":
+        return e["group"] in ("bromobenzene", "chlorobenzene")
+    return e["group"] == fit_set
+
+
+def qsar_summary(corr_rows, pair_rows):
+    """The fits for config.QSAR_DESCRIPTORS and CORR_PAIRS, one row per level x fit set x model,
+    in the order listed in config."""
+    by = {(r["level"], r["fit_set"], r["descriptor"]): r for r in corr_rows}
+    label = {d: lab for d, lab, _ in C.QSAR_DESCRIPTORS}
+    keep = ("n", "slope", "intercept", "r", "R2", "p", "SSE", "MSE", "RMSE", "LOO_RMSE", "Q2",
+            "slope_x_RT", "pred_RMSE_other_groups", "compounds")
+    rows = []
     for lv in C.LEVELS:
-        best = [r for r in corr_rows if r["level"] == lv and r["fit_set"] == C.CORR_FIT_GROUP][:top]
-        if not best:
-            continue
-        rows = [d for d in data_rows if d["level"] == lv]
-        fig, axes = plt.subplots(2, 3, figsize=(12, 7.5))
-        for ax, r in zip(axes.flat, best):
-            for grp, mk in ((C.CORR_FIT_GROUP, "o"), (None, "s")):
-                pts = [(d.get(r["descriptor"]), d["ln_kobs"], d["compound"]) for d in rows
-                       if (d["group"] == grp if grp else d["group"] != C.CORR_FIT_GROUP)
-                       and d.get(r["descriptor"]) is not None]
-                if pts:
-                    ax.scatter([p[0] for p in pts], [p[1] for p in pts], marker=mk,
-                               facecolor="k" if grp else "none", edgecolor="k")
-                    for x, y, lab in pts:
-                        ax.annotate(lab.replace("Tribromobenzene", "TBB").replace("Dibromobenzene", "DBB")
-                                    .replace("Tetrabromobenzene", "TeBB").replace("Hexabromobenzene", "HBB")
-                                    .replace("Bromobenzene", "BB"), (x, y), fontsize=7,
-                                    xytext=(3, 3), textcoords="offset points")
-            xs = [d[r["descriptor"]] for d in rows if d.get(r["descriptor"]) is not None]
-            if xs:
-                x0, x1 = min(xs), max(xs)
-                ax.plot([x0, x1], [r["slope"] * x0 + r["intercept"], r["slope"] * x1 + r["intercept"]], "k--", lw=1)
-            ax.set_xlabel(r["descriptor"], fontsize=8)
-            ax.set_ylabel("ln(k_obs / h$^{-1}$)", fontsize=8)
-            ax.set_title(f"R$^2$ = {r['R2']:.2f}, n = {r['n']}", fontsize=9)
-        for ax in list(axes.flat)[len(best):]:
-            ax.axis("off")
-        fig.suptitle(f"{lv}: top descriptors (filled: fit set, open: predicted)", fontsize=11)
-        fig.tight_layout()
-        f = outdir / f"correlations_{lv}.png"
-        fig.savefig(f, dpi=150)
-        plt.close(fig)
-        files.append(str(f))
-    return files
+        for fs in C.CORR_FIT_SETS:
+            base = {"level": lv, "fit_set": fs}
+            for desc, lab, dset in C.QSAR_DESCRIPTORS:
+                r = by.get((lv, fs, desc))
+                rows.append({**base, "descriptor_set": dset, "model": lab, "descriptors": desc,
+                             **({k: r.get(k) for k in keep} if r else {"n": 0})})
+            for pr in pair_rows:
+                if pr["level"] == lv and pr["fit_set"] == fs:
+                    rows.append({**base, "descriptor_set": "MLR",
+                                 "model": f"MLR: {label.get(pr['x1'], pr['x1'])} + {label.get(pr['x2'], pr['x2'])}",
+                                 "descriptors": f"{pr['x1']} + {pr['x2']}",
+                                 **{k: pr.get(k) for k in ("n", "R2", "adj_R2", "SSE", "MSE", "RMSE", "b0", "b1", "b2")}})
+    return rows
