@@ -1,0 +1,5 @@
+# fig_2e_reduction_m062x
+
+**Figure.** Natural logarithm of the observed pseudo-first-order rate constants (k_obs, h⁻¹) for electrochemical dehalogenation at −2.0 V vs SHE (uncompensated potential, without iR-drop compensation) [add electrode, cell, electrolyte and pH], plotted against the free energy of the two-electron reduction ArX + 2e⁻ → Ar⁻ + X⁻ at the most favorable C–X site, computed at M06-2X/6-311++G(d) in (a) the gas phase and (b) SMD (water). Filled gray circles are published bromobenzene data, open circles are new chlorobenzene data and gray squares are published PBDE data (BDE-47 and BDE-99). Error bars (±1 standard error of k_obs propagated to ln k_obs) are smaller than the markers; no standard errors are available for the chlorobenzenes. The dotted lines are least-squares fits to the seven bromobenzenes only: (a) slope −0.158 (kcal/mol)⁻¹, R² = 0.92, p = 0.0007; (b) slope −0.252 (kcal/mol)⁻¹, R² = 0.86, p = 0.003. Applied to the chlorobenzenes and PBDEs, these fits predict ln k_obs with an RMSE of 1.9 (a) and 3.1 (b).
+
+Fits over all twelve halobenzenes: (a) R² = 0.87, (b) R² = 0.61 (n = 12).
