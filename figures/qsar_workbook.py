@@ -14,8 +14,9 @@ Tabs
     <LV NN name> one tab per descriptor and level: data cells, SLOPE/INTERCEPT/RSQ formulas over
                  the fitted compounds (CORR_FIT_GROUP), and a scatter chart in Jonas's style that
                  reads those cells, so the fit line updates if a value changes
-Label and legend positions come from a matplotlib twin of each chart (PNGs in preview_dir if
-given): each label gets the nearest Excel position plus a manual offset, with a leader line.
+Label positions come from a matplotlib twin of each chart with the same size and plot-area
+geometry (PNGs in preview_dir if given): each label gets the nearest Excel position plus a
+manual offset, with a leader line. The legend sits below the plot, outside the data area.
 """
 from __future__ import annotations
 
@@ -44,11 +45,15 @@ from haloaro import plotting as P  # noqa: E402
 SHORT = {"b3lyp_gas": "B3gas", "b3lyp_smd": "B3SMD", "m062x_gas": "M6gas", "m062x_smd": "M6SMD"}
 STYLES = {"bromobenzene": "filled_gray_circle", "chlorobenzene": "open_black_circle",
           "pbde": "filled_gray_square"}
-CHART_PT = (3.5 * 72, 3.0 * 72)           # chart size in points (make_excel_chart default)
-# legend top-left corner (chart fractions) for each matplotlib legend location code
-LEGEND_XY = {1: (0.43, 0.06), 2: (0.19, 0.06), 3: (0.19, 0.56), 4: (0.43, 0.56),
-             6: (0.19, 0.32), 7: (0.43, 0.32), 8: (0.31, 0.56), 9: (0.31, 0.06)}
-Y_AXIS = {"min": -8, "max": 8, "major": 2, "format": "0"}      # shared, with room for the legend
+# Chart geometry, shared by the Excel chart and its matplotlib twin (used to place labels).
+# Larger chart and smaller type than the plot-like-jonas default, so 14 labelled points fit;
+# the legend sits below the plot, outside the data area.
+CHART_IN = (5.0, 4.0)
+CHART_PT = (CHART_IN[0] * 72, CHART_IN[1] * 72)
+PLOT_AREA = {"x": 0.13, "y": 0.05, "w": 0.83, "h": 0.64}       # inner plot area, from top left
+LEGEND = {"x": 0.06, "y": 0.905, "w": 0.92, "h": 0.07}          # one row under the axis title
+FONTS = {"tick_pt": 9, "axis_title_pt": 9, "legend_pt": 8, "label_pt": 7.5}
+Y_AXIS = {"min": -8, "max": 4, "major": 2, "format": "0"}      # shared by every chart
 BOLD = Font(bold=True)
 HEAD = Font(bold=True, size=12)
 WRAP = Alignment(wrap_text=True, vertical="top")
@@ -271,16 +276,21 @@ def sheet_name(lv, rank, desc, used):
 def twin_layout(data, lv, desc, fit, label, preview):
     """Draw the chart in matplotlib to choose label positions and the legend corner."""
     pts = P._points(data, lv, desc)
-    fig, ax = plt.subplots(figsize=(3.5, 3.0))
+    fig = plt.figure(figsize=CHART_IN)
+    pa = PLOT_AREA
+    ax = fig.add_axes([pa["x"], 1 - pa["y"] - pa["h"], pa["w"], pa["h"]])
     yt = [float(v) for v in range(Y_AXIS["min"], Y_AXIS["max"] + 1, Y_AXIS["major"])]
-    drawn, line = P._panel(ax, fit, pts, desc, label, (yt, 0), ms=7)
-    fig.tight_layout()
-    _, leg = P._legend(fig, ax, drawn, pts, line, 9)
-    placed = P._place_labels(fig, ax, pts, line, avoid=[leg])
+    drawn, line = P._panel(ax, fit, pts, desc, label, (yt, 0), ms=7, fontsize=FONTS["axis_title_pt"])
+    ax.tick_params(labelsize=FONTS["tick_pt"])
+    placed = P._place_labels(fig, ax, pts, line, fontsize=FONTS["label_pt"])
     if preview:
+        from matplotlib.lines import Line2D
+        fig.legend([Line2D([], [], linestyle="none", ms=6, mew=0.8, **{k: v for k, v in s.items() if k != "label"})
+                    for _, s in drawn], [s["label"] for _, s in drawn], loc="lower center", ncol=3,
+                   frameon=False, fontsize=FONTS["legend_pt"], bbox_to_anchor=(0.5, 0.01))
         fig.savefig(preview, dpi=150, facecolor="white")
     plt.close(fig)
-    return pts, placed, leg._loc
+    return pts, placed, None
 
 
 def chart_spec(desc, label, pts, placed, loc, caption):
@@ -305,11 +315,11 @@ def chart_spec(desc, label, pts, placed, loc, caption):
             s["trendline"] = "linear"
         series.append(s)
     ticks, dec = P.nice_ticks([p["x"] for p in pts])
-    lx, ly = LEGEND_XY.get(loc, (0.43, 0.06))
     return {"x_title": x_title(desc, label), "y_title": "ln k_{obs} (h^{−1})",
             "x_axis": {"min": ticks[0], "max": ticks[-1], "major": round(ticks[1] - ticks[0], 10),
                        "format": "0" if dec == 0 else "0." + "0" * dec},
-            "y_axis": Y_AXIS, "series": series, "legend": {"x": lx, "y": ly}, "caption": caption}
+            "y_axis": Y_AXIS, "series": series, "legend": dict(LEGEND), "plot_area": PLOT_AREA,
+            "caption": caption}
 
 
 def mlr_loo(x1, x2, y):
@@ -373,7 +383,7 @@ def main(out, preview_dir=None, levels=None):
     if preview_dir:
         Path(preview_dir).mkdir(parents=True, exist_ok=True)
     P.use_style()
-    st = dict(X.STYLE)
+    st = {**X.STYLE, **FONTS, "width_in": CHART_IN[0], "height_in": CHART_IN[1]}
 
     wb = Workbook()
     readme = wb.active

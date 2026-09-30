@@ -311,7 +311,14 @@ figures/             hand-finished figures: <name>.py (run after compile), .png/
                      (parameters, statistics, caveats), Performance (models ranked by LOO Q², descriptor
                      x level grid, MLR), Data, and an Excel chart of ln kobs vs every descriptor at every
                      level with live SLOPE/INTERCEPT/RSQ fits (make_excel_chart.py, from the
-                     plot-like-jonas skill; needs lxml in .venv). M062X_QSAR.xlsx: earlier M06-2X-only
-                     version.
+                     plot-like-jonas skill; needs lxml in .venv). Charts are 5 × 4 in with smaller type
+                     (9 pt axes, 7.5 pt labels) and the legend below the plot, so 14 labelled points fit.
+                     QSAR_MLR_exploration.xlsx (qsar_mlr_explore.py): multiple-linear-regression QSARs
+                     (haloaro/mlr.py; MLR_* in config.py) with every combination of 1-3 descriptors
+                     scored on 200 stratified train/test splits, a bromobenzene-to-others transfer test,
+                     collinearity flags, parity charts, and an Interpretation tab that relates the
+                     findings to sourced literature. M062X_QSAR.xlsx: earlier M06-2X-only version.
+notebooks/           Haloaromatics_QSAR_workflow.ipynb: the workflow and results in Python, step by step
+                     (make_notebook.py writes it; needs jupyter and pandas in .venv)
 ```
 # Haloaromatics

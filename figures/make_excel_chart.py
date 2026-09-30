@@ -3,7 +3,9 @@
 
 Copied from the plot-like-jonas skill (scripts/make_excel_chart.py). Changes: add_chart_sheet()
 and patch_many() build many chart tabs in one workbook in a single pass (re-opening a
-workbook with openpyxl does not keep charts reliably), and a filled_gray_square preset.
+workbook with openpyxl does not keep charts reliably), a filled_gray_square preset, and an
+optional spec["plot_area"] = {x, y, w, h} (chart fractions) fixing the inner plot area, and
+series style "line" (thin gray reference line without markers).
 
 Usage:
     python make_excel_chart.py spec.json
@@ -183,16 +185,21 @@ def add_chart_sheet(ws, spec, st):
         yref = Reference(ws, min_col=col + 1, min_row=1, max_row=n + 1)
         ser = Series(yref, xref, title_from_data=True)
 
-        preset = s.get("style") or DEFAULT_ORDER[i % len(DEFAULT_ORDER)]
-        symbol, fill, edge = MARKERS[preset]
-        ser.marker = Marker(symbol=symbol, size=s.get("marker_size", st["marker_size"]))
-        gp = GraphicalProperties(ln=line(edge, 0.75))
-        if fill:
-            gp.solidFill = fill
+        if s.get("style") == "line":
+            # reference line (e.g. 1:1 on a parity plot): thin gray solid line, no markers
+            ser.marker = Marker(symbol="none")
+            ser.graphicalProperties = GraphicalProperties(ln=line("A6A6A6", 0.75))
         else:
-            gp.noFill = True
-        ser.marker.graphicalProperties = gp
-        ser.graphicalProperties = GraphicalProperties(ln=LineProperties(noFill=True))
+            preset = s.get("style") or DEFAULT_ORDER[i % len(DEFAULT_ORDER)]
+            symbol, fill, edge = MARKERS[preset]
+            ser.marker = Marker(symbol=symbol, size=s.get("marker_size", st["marker_size"]))
+            gp = GraphicalProperties(ln=line(edge, 0.75))
+            if fill:
+                gp.solidFill = fill
+            else:
+                gp.noFill = True
+            ser.marker.graphicalProperties = gp
+            ser.graphicalProperties = GraphicalProperties(ln=LineProperties(noFill=True))
         ser.smooth = False
 
         if s.get("trendline"):
@@ -240,6 +247,13 @@ def add_chart_sheet(ws, spec, st):
         chart.series.append(fit)
         n_trend += 1
         col += 3
+
+    if spec.get("plot_area"):
+        # fixed inner plot-area position (chart fractions from the top left), so that label
+        # offsets computed elsewhere for the same geometry land where intended
+        pa = spec["plot_area"]
+        chart.plot_area.layout = Layout(manualLayout=ManualLayout(
+            layoutTarget="inner", xMode="edge", yMode="edge", x=pa["x"], y=pa["y"], w=pa["w"], h=pa["h"]))
 
     style_axis(chart.x_axis, st, spec.get("x_axis", {}), spec.get("x_title"), False)
     style_axis(chart.y_axis, st, spec.get("y_axis", {}), spec.get("y_title"), True)
