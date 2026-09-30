@@ -306,5 +306,9 @@ data/experimental_kobs.csv          measured rate constants used by compile
 slurm/g16_array.sbatch
 calcs/<stage>/{inputs,logs,chks}/   manifests in calcs/<stage>/
 results/
+figures/             hand-finished figures: <name>.py (run after compile), .png/.pdf, caption in .md
+                     M062X_QSAR.xlsx (m062x_qsar_workbook.py): Excel charts of ln kobs vs every
+                     M06-2X descriptor with live SLOPE/INTERCEPT/RSQ fits (make_excel_chart.py,
+                     from the plot-like-jonas skill; needs lxml in .venv)
 ```
 # Haloaromatics
