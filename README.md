@@ -307,8 +307,11 @@ slurm/g16_array.sbatch
 calcs/<stage>/{inputs,logs,chks}/   manifests in calcs/<stage>/
 results/
 figures/             hand-finished figures: <name>.py (run after compile), .png/.pdf, caption in .md
-                     M062X_QSAR.xlsx (m062x_qsar_workbook.py): Excel charts of ln kobs vs every
-                     M06-2X descriptor with live SLOPE/INTERCEPT/RSQ fits (make_excel_chart.py,
-                     from the plot-like-jonas skill; needs lxml in .venv)
+                     QSAR_workbook.xlsx (qsar_workbook.py [out] [preview_dir] [levels]): ReadMe
+                     (parameters, statistics, caveats), Performance (models ranked by LOO Q², descriptor
+                     x level grid, MLR), Data, and an Excel chart of ln kobs vs every descriptor at every
+                     level with live SLOPE/INTERCEPT/RSQ fits (make_excel_chart.py, from the
+                     plot-like-jonas skill; needs lxml in .venv). M062X_QSAR.xlsx: earlier M06-2X-only
+                     version.
 ```
 # Haloaromatics
