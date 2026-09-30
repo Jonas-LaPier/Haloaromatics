@@ -32,7 +32,7 @@ meaning how many equivalent C–X bonds it covers.
 - **Starting geometry:** a twisted C₂-like conformation (C–O–C 120°, both rings rotated
   50°). No conformer search is done; a CREST/xTB search is recommended before
   interpreting small energy differences.
-- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB, 12 h for opt/freq, scan and TS),
+- **Resources:** PBDE jobs use `RESOURCES_DPE` (16 CPUs, 48 GB; 12 h for opt/freq and TS, 2 days for the 16-point C–X scans),
   and `submit` sends them as a separate array.
 
 **Names.** `ClBz_124` is 1,2,4-trichlorobenzene and `ClBz_124_RA` is its radical anion.

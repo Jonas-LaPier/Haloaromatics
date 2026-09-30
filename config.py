@@ -144,7 +144,7 @@ RESOURCES = {
 RESOURCES_DPE = {
     "am1":     {"cpus": 1, "mem_gb": 2,  "time": "0-01:00:00"},
     "optfreq": {"cpus": 16, "mem_gb": 48, "time": "0-12:00:00"},
-    "tsscan":  {"cpus": 16, "mem_gb": 48, "time": "0-12:00:00"},
+    "tsscan":  {"cpus": 16, "mem_gb": 48, "time": "2-00:00:00"},   # 16-point scans: ~11-22 h
     "ts":      {"cpus": 16, "mem_gb": 48, "time": "0-12:00:00"},
     "sp":      {"cpus": 16, "mem_gb": 32, "time": "0-08:00:00"},
 }
