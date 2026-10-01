@@ -201,12 +201,19 @@ def parse_log(path):
     d = {"file": str(path), "name": path.stem}
     d["n_normal_term"] = text.count("Normal termination of Gaussian")
     d["error_term"] = "Error termination" in text
-    # l9999 prints the full summary before terminating, so opt-cycle messages can sit
-    # several hundred lines above the end of the file
-    tail = "\n".join(lines[-800:])
-    d["error_type"] = next((code for pat, code in KNOWN_ERRORS if pat in tail), None)
-    if d["error_type"] is None and d["error_term"]:
-        d["error_type"] = "unknown"
+    if d["error_term"]:
+        # Reason of an error termination: the known message that occurs last after the last
+        # successful step. l9999 prints a long summary before terminating (over 800 lines for
+        # the PBDEs), so the message can sit far above the end; searching only after the last
+        # "Normal termination" keeps messages of an earlier, successful step out.
+        start = text.rfind("Normal termination of Gaussian")
+        seg = text[start:] if start >= 0 else text
+        hits = [(seg.rfind(pat), code) for pat, code in KNOWN_ERRORS if pat in seg]
+        d["error_type"] = max(hits)[1] if hits else "unknown"
+    else:
+        # jobs without an error line (running or killed): messages near the end only
+        tail = "\n".join(lines[-800:])
+        d["error_type"] = next((code for pat, code in KNOWN_ERRORS if pat in tail), None)
     m = None
     for m in RE_SCF.finditer(text):
         pass

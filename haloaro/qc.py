@@ -31,8 +31,10 @@ def evaluate(parsed, species, stage_kind, site=None):
     if not parsed["error_term"] and parsed["n_normal_term"] < need:
         if parsed["n_normal_term"] == 0:
             return "incomplete", ["no_termination (running, killed or time limit)"]
-        flags.append(f"terminations {parsed['n_normal_term']}/{need}")
-        fail = True
+        # an earlier step finished (e.g. Opt of Opt+Freq) and no error line: the next step is
+        # still running or was killed, so this is not a failure that retry should act on
+        return "incomplete", [f"terminations {parsed['n_normal_term']}/{need} "
+                              "(later step running, killed or time limit)"]
 
     if parsed["charge"] is not None and (parsed["charge"], parsed["mult"]) != (species.charge, species.mult):
         flags.append("charge_mult_mismatch")

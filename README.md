@@ -181,7 +181,12 @@ Details:
 
 ### Quality checks (`haloaro/qc.py`)
 
-- Normal termination count (2 for Opt+Freq)
+- Normal termination count (2 for Opt+Freq). A log with fewer terminations and no error line is
+  `incomplete` (still running, killed or out of time), not `fail`, so `retry` leaves it alone
+  unless `--include-incomplete` is given.
+- The reason for an error termination is the known message that occurs last after the last
+  successful step (the whole log after the last "Normal termination"). Gaussian's closing
+  summary can be over 800 lines long for the PBDEs, so the message may sit far above the end.
 - Charge, multiplicity and atom count match the species
 - A stationary point was found and the free energy is present
 - There are no imaginary frequencies at minima and exactly 1 at TSs. Extra imaginary modes
