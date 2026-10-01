@@ -323,6 +323,9 @@ figures/             hand-finished figures: <name>.py (run after compile), .png/
                      scored on 200 stratified train/test splits, a bromobenzene-to-others transfer test,
                      collinearity flags, parity charts, and an Interpretation tab that relates the
                      findings to sourced literature. M062X_QSAR.xlsx: earlier M06-2X-only version.
+                     ts_scan_analysis.py: classifies every C-X scan (smooth barrier, ~barrierless,
+                     state crossing, uphill to end) -> results/ts_scan_summary.csv and
+                     results/plots/ts_scans_<level>.png; TS_scan_interpretation.md discusses them.
 notebooks/           Haloaromatics_QSAR_workflow.ipynb: the workflow and results in Python, step by step
                      (make_notebook.py writes it; needs jupyter and pandas in .venv)
 ```
