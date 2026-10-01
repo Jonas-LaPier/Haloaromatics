@@ -112,7 +112,7 @@ scan. A BDE-66 standard would test whether the unidentified product is the C2-cl
 
 - **Andrieux1986** Andrieux, C. P.; Savéant, J. M.; Su, K. B. J. Phys. Chem. 1986, 90, 3815. https://doi.org/10.1021/j100407a059
 - **Mazzucato2023** Mazzucato, M.; Isse, A. A.; Durante, C. Curr. Opin. Electrochem. 2023. https://doi.org/10.1016/j.coelec.2023.101254
-- **Yu2025** Yu et al. Electrochemical reduction for chlorinated hydrocarbons contaminated groundwater remediation: Mechanisms, challenges, and perspectives. Water Res. 2025 (Zotero key 47SIUCWM).
+- **Yu2025** Yu et al. Electrochemical reduction for chlorinated hydrocarbons contaminated groundwater remediation: Mechanisms, challenges, and perspectives. Water Res. 2025. https://doi.org/10.1016/j.watres.2025.123149
 - **KingMitch2022** King, J. F.; Mitch, W. A. Environ. Sci. Technol. 2022, 56, 17965. https://doi.org/10.1021/acs.est.2c05608
 - **KingMitch2024** King, J. F.; Mitch, W. A. Crit. Rev. Environ. Sci. Technol. 2024. https://doi.org/10.1080/10643389.2023.2239130
 - **LaPier2026** LaPier, J. K. et al. Environ. Sci. Technol. 2026, 60, 1346. https://doi.org/10.1021/acs.est.5c03324
